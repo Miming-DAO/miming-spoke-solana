@@ -1,0 +1,55 @@
+use crate::contexts::vault::Teleport;
+use crate::errors::VaultErrorCode;
+use anchor_lang::prelude::*;
+use solana_program::keccak::hash;
+
+pub fn generate_uuid_string(user: &Pubkey, timestamp: i64) -> String {
+    let mut data = Vec::new();
+    data.extend_from_slice(user.as_ref());
+    data.extend_from_slice(&timestamp.to_le_bytes());
+
+    let hash_result = hash(&data);
+    let uuid_bytes = &hash_result.0[..16];
+
+    uuid_bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+pub fn teleport(ctx: Context<Teleport>, amount: u64) -> Result<()> {
+    let teleporter = &ctx.accounts.teleporter;
+    let vault = &ctx.accounts.vault;
+
+    let teleporter_sol_balance = teleporter.to_account_info().lamports();
+    require!(
+        teleporter_sol_balance >= amount,
+        VaultErrorCode::InsufficientSolBalance
+    );
+
+    let sol_transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
+        &teleporter.key(),
+        &vault.key(),
+        amount,
+    );
+    anchor_lang::solana_program::program::invoke(
+        &sol_transfer_instruction,
+        &[teleporter.to_account_info(), vault.to_account_info()],
+    )?;
+
+    let teleporter_miming_balance = ctx.accounts.teleporter_miming_token.amount;
+    require!(
+        teleporter_miming_balance > 100u64,
+        VaultErrorCode::InsufficientMimingBalance
+    );
+
+    let miming_transfer_instruction = CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        anchor_spl::token::Transfer {
+            from: ctx.accounts.teleporter_miming_token.to_account_info(),
+            to: ctx.accounts.vault_miming_token.to_account_info(),
+            authority: ctx.accounts.teleporter.to_account_info(),
+        },
+    );
+    let miming_token_amount = 100u64 * 10u64.pow(ctx.accounts.miming_token.decimals as u32);
+    anchor_spl::token::transfer(miming_transfer_instruction, miming_token_amount)?;
+
+    Ok(())
+}
