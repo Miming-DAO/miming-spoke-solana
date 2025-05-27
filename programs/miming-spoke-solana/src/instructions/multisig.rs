@@ -13,17 +13,17 @@ use anchor_lang::prelude::*;
 use solana_program::keccak::hash;
 
 pub fn generate_uuid_string(
-    created_by: &Pubkey,
-    created_at: i64,
+    signer_key: &Pubkey,
+    unix_timestamp: i64,
     action_type: &MultisigProposalType,
-    proposal_counter: u64,
-    member_counter: u64,
+    proposal_counter_value: u64,
+    member_counter_value: u64,
 ) -> String {
     let mut data = Vec::new();
-    data.extend_from_slice(created_by.as_ref());
-    data.extend_from_slice(&created_at.to_le_bytes());
-    data.extend_from_slice(&proposal_counter.to_le_bytes());
-    data.extend_from_slice(&member_counter.to_le_bytes());
+    data.extend_from_slice(signer_key.as_ref());
+    data.extend_from_slice(&unix_timestamp.to_le_bytes());
+    data.extend_from_slice(&proposal_counter_value.to_le_bytes());
+    data.extend_from_slice(&member_counter_value.to_le_bytes());
 
     let enum_value = match action_type {
         MultisigProposalType::RegisterMember => 0,
@@ -157,15 +157,12 @@ pub fn create_proposal(
     }
 
     let proposal = &mut ctx.accounts.proposal;
-    let proposal_counter_count = ctx.accounts.proposal_counter.count;
-    let member_counter_count = ctx.accounts.member_counter.count;
-
     proposal.uuid = generate_uuid_string(
         &signer_key,
         Clock::get()?.unix_timestamp,
         &action_type,
-        proposal_counter_count,
-        member_counter_count,
+        ctx.accounts.proposal_counter.count,
+        ctx.accounts.member_counter.count,
     );
     proposal.name = name;
     proposal.action_type = action_type;

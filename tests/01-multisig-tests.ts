@@ -124,6 +124,17 @@ const createProposal = async (
     const multisigProposal2 = await program.account.multisigProposal.fetch(proposalPda2);
     console.log("Multisig Proposal 2:", multisigProposal2);
 
+    console.log(proposalCounterAccount2.count.toNumber());
+
+    for (let i = 0; i <= proposalCounterAccount2.count.toNumber(); i++) {
+        const [proposalPda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("miming_multisig_proposal"), Buffer.from(new anchor.BN(i).toArray('le', 8))],
+            program.programId
+        );
+        const proposal = await program.account.multisigProposal.fetch(proposalPda);
+        console.log(`Proposal ${i + 1}:`, proposal);
+    }
+
     // const proposals = multisigRegistry.proposals;
     // const proposal = proposals.length > 0 ? proposals[proposals.length - 1] : null;
 
