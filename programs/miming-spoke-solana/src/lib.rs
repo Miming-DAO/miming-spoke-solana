@@ -13,9 +13,13 @@ declare_id!("3e2igyWExmDZmJfRpMRwn5mrM838Fam3AMzPYvttxRT8");
 #[program]
 pub mod miming_spoke_solana {
     use super::*;
-    
+
+    pub fn init_multisig_counters(ctx: Context<InitMultisigCountersAccounts>) -> Result<()> {
+        instructions::multisig::init_counters(ctx)
+    }
+
     pub fn multisig_create_proposal(
-        ctx: Context<NewMultisig>,
+        ctx: Context<CreateMultisigProposalAccounts>,
         name: String,
         action_type: MultisigProposalType,
         target_pubkey: Pubkey,
@@ -23,11 +27,17 @@ pub mod miming_spoke_solana {
         instructions::multisig::create_proposal(ctx, name, action_type, target_pubkey)
     }
 
-    pub fn multisig_sign_proposal(ctx: Context<SetMultisig>, uuid: String) -> Result<()> {
+    pub fn multisig_sign_proposal(
+        ctx: Context<SignMultisigProposalAccounts>,
+        uuid: String,
+    ) -> Result<()> {
         instructions::multisig::sign_proposal(ctx, uuid)
     }
 
-    pub fn multisig_approve_proposal(ctx: Context<SetMultisig>, uuid: String) -> Result<()> {
+    pub fn multisig_approve_proposal(
+        ctx: Context<ApproveMultisigAccounts>,
+        uuid: String,
+    ) -> Result<()> {
         instructions::multisig::approve_proposal(ctx, uuid)
     }
 

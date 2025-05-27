@@ -1,5 +1,10 @@
 use anchor_lang::prelude::*;
 
+pub const STRING_LEN: usize = 64;
+pub const PUBKEY_SIZE: usize = 32;
+pub const ENUM_SIZE: usize = 1;
+pub const DISCRIMINATOR: usize = 8;
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub enum MultisigStatus {
     Pending,
@@ -15,58 +20,65 @@ impl Default for MultisigStatus {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-pub struct MultisigMember {
-    pub name: String,
-    pub pubkey: Pubkey,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub enum MultisigProposalType {
     RegisterMember,
     UnregisterMember,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
+#[account]
 pub struct MultisigProposal {
     pub uuid: String,
     pub name: String,
     pub action_type: MultisigProposalType,
     pub target_pubkey: Pubkey,
-    pub required_signers: Vec<MultisigMember>,
-    pub signatures: Vec<Pubkey>,
     pub status: MultisigStatus,
 }
 
-#[account]
-pub struct MultisigRegistry {
-    pub members: Vec<MultisigMember>,
-    pub proposals: Vec<MultisigProposal>,
-}
-
-impl MultisigRegistry {
-    pub const SIZE_STRING: usize = 8 + 64;
-    pub const SIZE_PUBKEY: usize = 32;
-    pub const SIZE_ENUM: usize = 1;
-    pub const SIZE_VEC_PREFIX: usize = 8;
-    
-    pub const MAX_MEMBERS_LEN: usize = 5; // members: Vec<MultisigMember>,
-    pub const MAX_PROPOSALS_LEN: usize = 5; // proposals: Vec<MultisigProposal>,
-    pub const MAX_REQUIRED_SIGNERS_LEN: usize = 5; // required_signers: Vec<MultisigMember>,
-
-    pub const SIZE_MULTISIG_MEMBER: usize = 8 + 
-        Self::SIZE_STRING + // name
-        Self::SIZE_PUBKEY;  // pubkey
-
-    pub const SIZE_PROPOSAL: usize = 8 +
-        Self::SIZE_STRING + // uuid
-        Self::SIZE_STRING + // name
-        Self::SIZE_ENUM + // action_type
-        Self::SIZE_PUBKEY + // target_pubkey
-        Self::SIZE_VEC_PREFIX + (Self::MAX_REQUIRED_SIGNERS_LEN * Self::SIZE_MULTISIG_MEMBER) + // required_signers
-        Self::SIZE_VEC_PREFIX + (Self::MAX_REQUIRED_SIGNERS_LEN * Self::SIZE_PUBKEY) + // signatures
-        Self::SIZE_ENUM; // status
-
+impl MultisigProposal {
     pub const LEN: usize = 8 +
-        Self::SIZE_VEC_PREFIX + (Self::MAX_MEMBERS_LEN * Self::SIZE_MULTISIG_MEMBER) + // members
-        Self::SIZE_VEC_PREFIX + (Self::MAX_PROPOSALS_LEN * Self::SIZE_PROPOSAL); // proposals
+        STRING_LEN + // uuid
+        STRING_LEN + // name
+        ENUM_SIZE + // action_type
+        PUBKEY_SIZE + // target_pubkey
+        ENUM_SIZE; // status
 }
+
+#[account]
+pub struct MultisigProposalCounter { pub count: u64,}
+
+#[account]
+pub struct MultisigSignature {
+    pub proposal_uuid: String,
+    pub pubkey: Pubkey,
+}
+
+impl MultisigSignature {
+    pub const PUBKEY_SIZE: usize = 32;
+    
+    pub const LEN: usize = 8 + 
+        PUBKEY_SIZE;  // pubkey
+}
+
+#[account]
+pub struct MultisigSignatureCounter { pub count: u64,}
+
+#[account]
+pub struct MultisigMember {
+    pub proposal_uuid: String,
+    pub name: String,
+    pub pubkey: Pubkey,
+}
+
+impl MultisigMember {
+    pub const STRING_LEN: usize = 8 + 64;
+    pub const PUBKEY_SIZE: usize = 32;
+    
+    pub const LEN: usize = 8 + 
+        STRING_LEN + // name
+        PUBKEY_SIZE;  // pubkey
+
+    pub const MAX_MEMBER_SIZE: usize = 5;
+}
+
+#[account]
+pub struct MultisigMemberCounter { pub count: u64,}
