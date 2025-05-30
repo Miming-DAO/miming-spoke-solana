@@ -19,6 +19,7 @@ describe("01-multisig-tests", () => {
     const target = Keypair.generate();
 
     let firstMember: anchor.web3.Keypair;
+    let secondMember: anchor.web3.Keypair;
 
     it("should initialize the identifiers.", async () => {
         const signer = Keypair.generate();
@@ -305,38 +306,35 @@ describe("01-multisig-tests", () => {
         ], program.programId);
 
         const memberIdentifier = await program.account.multisigIdentifier.fetch(memberIdentifierPda);
-        let memberId = null
-
         for (let i = 0; i < memberIdentifier.id.toNumber(); i++) {
-            const [memberPda] = PublicKey.findProgramAddressSync([
+            const [verifySignerMemberPda] = PublicKey.findProgramAddressSync([
                 Buffer.from("member"),
                 new anchor.BN(i).toArrayLike(Buffer, 'le', 8)
             ], program.programId);
 
-            const member = await program.account.multisigMember.fetch(memberPda);
+            const member = await program.account.multisigMember.fetch(verifySignerMemberPda);
             if (member.pubkey.equals(firstMember.publicKey)) {
-                memberId = member.id;
+                await program.methods.multisigSignProposal(proposal.id, member.id)
+                    .accounts({
+                        signer: firstMember.publicKey,
+                        signatureIdentifier: signatureIdentifierPda,
+                        signature: signaturePda,
+                        currentProposal: proposalPda,
+                        memberIdentifier: memberIdentifierPda,
+                        verifySignerMember: null,
+                        systemProgram: SystemProgram.programId
+                    } as any)
+                    .signers([firstMember])
+                    .rpc()
+                    .catch((err: any) => {
+                        expect(err).to.have.property("error");
+                        expect(err.error.errorCode?.code).to.equal("MissingVerifyMemberPDA");
+                        expect(err.error.errorMessage).to.equal("Verify member PDA could not be derived from 'verify_member_id'.");
+                    });
+
                 break;
             }
         }
-
-        await program.methods.multisigSignProposal(proposal.id, memberId)
-            .accounts({
-                signer: firstMember.publicKey,
-                signatureIdentifier: signatureIdentifierPda,
-                signature: signaturePda,
-                currentProposal: proposalPda,
-                memberIdentifier: memberIdentifierPda,
-                verifySignerMember: null,
-                systemProgram: SystemProgram.programId
-            } as any)
-            .signers([firstMember])
-            .rpc()
-            .catch((err: any) => {
-                expect(err).to.have.property("error");
-                expect(err.error.errorCode?.code).to.equal("MissingVerifyMemberPDA");
-                expect(err.error.errorMessage).to.equal("Verify member PDA could not be derived from 'verify_member_id'.");
-            });
     });
 
     it("signing a proposal should fail if the signer is not a member (UnauthorizedMember).", async () => {
@@ -380,26 +378,22 @@ describe("01-multisig-tests", () => {
         ], program.programId);
 
         const memberIdentifier = await program.account.multisigIdentifier.fetch(memberIdentifierPda);
-        let memberId = null
-
         for (let i = 0; i < memberIdentifier.id.toNumber(); i++) {
-            const [memberPda] = PublicKey.findProgramAddressSync([
+            const [verifySignerMemberPda] = PublicKey.findProgramAddressSync([
                 Buffer.from("member"),
                 new anchor.BN(i).toArrayLike(Buffer, 'le', 8)
             ], program.programId);
 
-            const member = await program.account.multisigMember.fetch(memberPda);
+            const member = await program.account.multisigMember.fetch(verifySignerMemberPda);
             if (member.pubkey.equals(firstMember.publicKey)) {
-                memberId = member.id;
-
-                await program.methods.multisigSignProposal(proposal.id, memberId)
+                await program.methods.multisigSignProposal(proposal.id, member.id)
                     .accounts({
                         signer: signer.publicKey,
                         signatureIdentifier: signatureIdentifierPda,
                         signature: signaturePda,
                         currentProposal: proposalPda,
                         memberIdentifier: memberIdentifierPda,
-                        verifySignerMember: memberPda,
+                        verifySignerMember: verifySignerMemberPda,
                         systemProgram: SystemProgram.programId
                     } as any)
                     .signers([signer])
@@ -416,18 +410,404 @@ describe("01-multisig-tests", () => {
     });
 
     it("approving a proposal should fail if the proposal is not found (ProposalNotFound).", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
+        await connection.requestAirdrop(firstMember.publicKey, 10e9);
 
+        await sleep(2000);
+
+        const proposalIdentifier = await program.account.multisigIdentifier.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        const name = "Test";
+        const actionType = { registerMember: {} };
+        const pubkey = target.publicKey;
+
+        await program.methods.multisigCreateProposal(name, actionType, pubkey, null)
+            .accounts({
+                signer: signer.publicKey,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                verifyTargetMember: null,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
+
+        const proposal = await program.account.multisigProposal.fetch(proposalPda);
+        expect(proposal.name).to.equal(name);
+        expect(Object.keys(proposal.actionType)[0]).to.equal(Object.keys(actionType)[0]);
+        expect(proposal.pubkey.equals(pubkey)).to.be.true;
+        expect(proposal.status).to.have.property("pending");
+
+        const signatureIdentifier = await program.account.multisigIdentifier.fetch(signatureIdentifierPda);
+        const [signaturePda] = PublicKey.findProgramAddressSync([
+            Buffer.from("signature"),
+            new anchor.BN(signatureIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        const memberIdentifier = await program.account.multisigIdentifier.fetch(memberIdentifierPda);
+        for (let i = 0; i < memberIdentifier.id.toNumber(); i++) {
+            const [verifySignerMemberPda] = PublicKey.findProgramAddressSync([
+                Buffer.from("member"),
+                new anchor.BN(i).toArrayLike(Buffer, 'le', 8)
+            ], program.programId);
+
+            const member = await program.account.multisigMember.fetch(verifySignerMemberPda);
+            if (member.pubkey.equals(firstMember.publicKey)) {
+                await program.methods.multisigSignProposal(proposal.id, member.id)
+                    .accounts({
+                        signer: firstMember.publicKey,
+                        signatureIdentifier: signatureIdentifierPda,
+                        signature: signaturePda,
+                        currentProposal: proposalPda,
+                        memberIdentifier: memberIdentifierPda,
+                        verifySignerMember: verifySignerMemberPda,
+                        systemProgram: SystemProgram.programId
+                    } as any)
+                    .signers([firstMember])
+                    .rpc();
+
+                const signature = await program.account.multisigSignature.fetch(signaturePda);
+                expect(signature.proposalId.toNumber()).to.equal(proposal.id.toNumber());
+                expect(signature.noRequiredSigners.toNumber()).equal(1)
+                expect(signature.noSignatures.toNumber()).equal(1)
+                expect(signature.pubkey.equals(firstMember.publicKey)).to.be.true;
+
+                const [memberPda] = PublicKey.findProgramAddressSync([
+                    Buffer.from("member"),
+                    new anchor.BN(memberIdentifier.id).toArrayLike(Buffer, 'le', 8)
+                ], program.programId);
+
+                await program.methods.multisigApproveProposal(proposal.id.addn(5678), signature.id)
+                    .accounts({
+                        signer: firstMember.publicKey,
+                        memberIdentifier: memberIdentifierPda,
+                        member: memberPda,
+                        currentProposal: proposalPda,
+                        verifySignerSignature: signaturePda,
+                        systemProgram: SystemProgram.programId
+                    } as any)
+                    .signers([firstMember])
+                    .rpc()
+                    .catch((err: any) => {
+                        expect(err).to.have.property("error");
+                        expect(err.error.errorCode?.code).to.equal("ProposalNotFound");
+                        expect(err.error.errorMessage).to.equal("The specified proposal does not exist or is invalid.");
+                    });
+
+                break;
+            }
+        }
     });
 
     it("approving a proposal should fail if the proposal status is not Pending (CannotApproveResolvedProposal).", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
+        await connection.requestAirdrop(firstMember.publicKey, 10e9);
 
+        await sleep(2000);
+
+        const proposalIdentifier = await program.account.multisigIdentifier.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        const name = "Test";
+        const actionType = { registerMember: {} };
+        const pubkey = target.publicKey;
+
+        await program.methods.multisigCreateProposal(name, actionType, pubkey, null)
+            .accounts({
+                signer: signer.publicKey,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                verifyTargetMember: null,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
+
+        const proposal = await program.account.multisigProposal.fetch(proposalPda);
+        expect(proposal.name).to.equal(name);
+        expect(Object.keys(proposal.actionType)[0]).to.equal(Object.keys(actionType)[0]);
+        expect(proposal.pubkey.equals(pubkey)).to.be.true;
+        expect(proposal.status).to.have.property("pending");
+
+        const signatureIdentifier = await program.account.multisigIdentifier.fetch(signatureIdentifierPda);
+        const [signaturePda] = PublicKey.findProgramAddressSync([
+            Buffer.from("signature"),
+            new anchor.BN(signatureIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        const memberIdentifier = await program.account.multisigIdentifier.fetch(memberIdentifierPda);
+        for (let i = 0; i < memberIdentifier.id.toNumber(); i++) {
+            const [verifySignerMemberPda] = PublicKey.findProgramAddressSync([
+                Buffer.from("member"),
+                new anchor.BN(i).toArrayLike(Buffer, 'le', 8)
+            ], program.programId);
+
+            const member = await program.account.multisigMember.fetch(verifySignerMemberPda);
+            if (member.pubkey.equals(firstMember.publicKey)) {
+                await program.methods.multisigSignProposal(proposal.id, member.id)
+                    .accounts({
+                        signer: firstMember.publicKey,
+                        signatureIdentifier: signatureIdentifierPda,
+                        signature: signaturePda,
+                        currentProposal: proposalPda,
+                        memberIdentifier: memberIdentifierPda,
+                        verifySignerMember: verifySignerMemberPda,
+                        systemProgram: SystemProgram.programId
+                    } as any)
+                    .signers([firstMember])
+                    .rpc();
+
+                const signature = await program.account.multisigSignature.fetch(signaturePda);
+                expect(signature.proposalId.toNumber()).to.equal(proposal.id.toNumber());
+                expect(signature.noRequiredSigners.toNumber()).equal(1)
+                expect(signature.noSignatures.toNumber()).equal(1)
+                expect(signature.pubkey.equals(firstMember.publicKey)).to.be.true;
+
+                const [memberPda] = PublicKey.findProgramAddressSync([
+                    Buffer.from("member"),
+                    new anchor.BN(memberIdentifier.id).toArrayLike(Buffer, 'le', 8)
+                ], program.programId);
+
+                await program.methods.multisigApproveProposal(proposal.id, signature.id)
+                    .accounts({
+                        signer: firstMember.publicKey,
+                        memberIdentifier: memberIdentifierPda,
+                        member: memberPda,
+                        currentProposal: proposalPda,
+                        verifySignerSignature: signaturePda,
+                        systemProgram: SystemProgram.programId
+                    } as any)
+                    .signers([firstMember])
+                    .rpc()
+
+                secondMember = target
+
+                const updatedMemberIdentifier = await program.account.multisigIdentifier.fetch(memberIdentifierPda);
+                const [updatedMemberPda] = PublicKey.findProgramAddressSync([
+                    Buffer.from("member"),
+                    new anchor.BN(updatedMemberIdentifier.id).toArrayLike(Buffer, 'le', 8)
+                ], program.programId);
+
+                await program.methods.multisigApproveProposal(proposal.id, signature.id)
+                    .accounts({
+                        signer: firstMember.publicKey,
+                        memberIdentifier: memberIdentifierPda,
+                        member: updatedMemberPda,
+                        currentProposal: proposalPda,
+                        verifySignerSignature: signaturePda,
+                        systemProgram: SystemProgram.programId
+                    } as any)
+                    .signers([firstMember])
+                    .rpc()
+                    .catch((err: any) => {
+                        expect(err).to.have.property("error");
+                        expect(err.error.errorCode?.code).to.equal("CannotApproveResolvedProposal");
+                        expect(err.error.errorMessage).to.equal("Only pending proposals can be approved.");
+                    });
+
+                break;
+            }
+        }
     });
 
     it("approving a proposal should fail if the signature is invalid (InvalidSignature).", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
+        await connection.requestAirdrop(firstMember.publicKey, 10e9);
+        await connection.requestAirdrop(secondMember.publicKey, 10e9);
 
+        await sleep(2000);
+
+        const proposalIdentifier = await program.account.multisigIdentifier.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        const name = "Test";
+        const actionType = { registerMember: {} };
+        const pubkey = target.publicKey;
+
+        await program.methods.multisigCreateProposal(name, actionType, pubkey, null)
+            .accounts({
+                signer: signer.publicKey,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                verifyTargetMember: null,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
+
+        const proposal = await program.account.multisigProposal.fetch(proposalPda);
+        expect(proposal.name).to.equal(name);
+        expect(Object.keys(proposal.actionType)[0]).to.equal(Object.keys(actionType)[0]);
+        expect(proposal.pubkey.equals(pubkey)).to.be.true;
+        expect(proposal.status).to.have.property("pending");
+
+        const signatureIdentifier = await program.account.multisigIdentifier.fetch(signatureIdentifierPda);
+        const [signaturePda] = PublicKey.findProgramAddressSync([
+            Buffer.from("signature"),
+            new anchor.BN(signatureIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        const memberIdentifier = await program.account.multisigIdentifier.fetch(memberIdentifierPda);
+        for (let i = 0; i < memberIdentifier.id.toNumber(); i++) {
+            const [verifySignerMemberPda] = PublicKey.findProgramAddressSync([
+                Buffer.from("member"),
+                new anchor.BN(i).toArrayLike(Buffer, 'le', 8)
+            ], program.programId);
+
+            const member = await program.account.multisigMember.fetch(verifySignerMemberPda);
+            if (member.pubkey.equals(firstMember.publicKey)) {
+                await program.methods.multisigSignProposal(proposal.id, member.id)
+                    .accounts({
+                        signer: firstMember.publicKey,
+                        signatureIdentifier: signatureIdentifierPda,
+                        signature: signaturePda,
+                        currentProposal: proposalPda,
+                        memberIdentifier: memberIdentifierPda,
+                        verifySignerMember: verifySignerMemberPda,
+                        systemProgram: SystemProgram.programId
+                    } as any)
+                    .signers([firstMember])
+                    .rpc();
+
+                const signature = await program.account.multisigSignature.fetch(signaturePda);
+                expect(signature.proposalId.toNumber()).to.equal(proposal.id.toNumber());
+                expect(signature.noRequiredSigners.toNumber()).equal(2)
+                expect(signature.noSignatures.toNumber()).equal(1)
+                expect(signature.pubkey.equals(firstMember.publicKey)).to.be.true;
+
+                const [memberPda] = PublicKey.findProgramAddressSync([
+                    Buffer.from("member"),
+                    new anchor.BN(memberIdentifier.id).toArrayLike(Buffer, 'le', 8)
+                ], program.programId);
+
+                await program.methods.multisigApproveProposal(proposal.id, signature.id.addn(798))
+                    .accounts({
+                        signer: firstMember.publicKey,
+                        memberIdentifier: memberIdentifierPda,
+                        member: memberPda,
+                        currentProposal: proposalPda,
+                        verifySignerSignature: signaturePda,
+                        systemProgram: SystemProgram.programId
+                    } as any)
+                    .signers([firstMember])
+                    .rpc()
+                    .catch((err: any) => {
+                        expect(err).to.have.property("error");
+                        expect(err.error.errorCode?.code).to.equal("InvalidSignature");
+                        expect(err.error.errorMessage).to.equal("The provided signature is invalid or corrupted.");
+                    });
+
+                break;
+            }
+        }
     });
 
     it("approving a proposal should fail if the required signatures are incomplete (SignaturesIncomplete).", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
+        await connection.requestAirdrop(firstMember.publicKey, 10e9);
+        await connection.requestAirdrop(secondMember.publicKey, 10e9);
 
+        await sleep(2000);
+
+        const proposalIdentifier = await program.account.multisigIdentifier.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        const name = "Test";
+        const actionType = { registerMember: {} };
+        const pubkey = target.publicKey;
+
+        await program.methods.multisigCreateProposal(name, actionType, pubkey, null)
+            .accounts({
+                signer: signer.publicKey,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                verifyTargetMember: null,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
+
+        const proposal = await program.account.multisigProposal.fetch(proposalPda);
+        expect(proposal.name).to.equal(name);
+        expect(Object.keys(proposal.actionType)[0]).to.equal(Object.keys(actionType)[0]);
+        expect(proposal.pubkey.equals(pubkey)).to.be.true;
+        expect(proposal.status).to.have.property("pending");
+
+        const signatureIdentifier = await program.account.multisigIdentifier.fetch(signatureIdentifierPda);
+        const [signaturePda] = PublicKey.findProgramAddressSync([
+            Buffer.from("signature"),
+            new anchor.BN(signatureIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        const memberIdentifier = await program.account.multisigIdentifier.fetch(memberIdentifierPda);
+        for (let i = 0; i < memberIdentifier.id.toNumber(); i++) {
+            const [verifySignerMemberPda] = PublicKey.findProgramAddressSync([
+                Buffer.from("member"),
+                new anchor.BN(i).toArrayLike(Buffer, 'le', 8)
+            ], program.programId);
+
+            const member = await program.account.multisigMember.fetch(verifySignerMemberPda);
+            if (member.pubkey.equals(firstMember.publicKey)) {
+                await program.methods.multisigSignProposal(proposal.id, member.id)
+                    .accounts({
+                        signer: firstMember.publicKey,
+                        signatureIdentifier: signatureIdentifierPda,
+                        signature: signaturePda,
+                        currentProposal: proposalPda,
+                        memberIdentifier: memberIdentifierPda,
+                        verifySignerMember: verifySignerMemberPda,
+                        systemProgram: SystemProgram.programId
+                    } as any)
+                    .signers([firstMember])
+                    .rpc();
+
+                const signature = await program.account.multisigSignature.fetch(signaturePda);
+                expect(signature.proposalId.toNumber()).to.equal(proposal.id.toNumber());
+                expect(signature.noRequiredSigners.toNumber()).equal(2)
+                expect(signature.noSignatures.toNumber()).equal(1)
+                expect(signature.pubkey.equals(firstMember.publicKey)).to.be.true;
+
+                const [memberPda] = PublicKey.findProgramAddressSync([
+                    Buffer.from("member"),
+                    new anchor.BN(memberIdentifier.id).toArrayLike(Buffer, 'le', 8)
+                ], program.programId);
+
+                await program.methods.multisigApproveProposal(proposal.id, signature.id)
+                    .accounts({
+                        signer: firstMember.publicKey,
+                        memberIdentifier: memberIdentifierPda,
+                        member: memberPda,
+                        currentProposal: proposalPda,
+                        verifySignerSignature: signaturePda,
+                        systemProgram: SystemProgram.programId
+                    } as any)
+                    .signers([firstMember])
+                    .rpc()
+                    .catch((err: any) => {
+                        expect(err).to.have.property("error");
+                        expect(err.error.errorCode?.code).to.equal("SignaturesIncomplete");
+                        expect(err.error.errorMessage).to.equal("Proposal cannot proceed; required signatures are incomplete.");
+                    });
+
+                break;
+            }
+        }
     });
 });
