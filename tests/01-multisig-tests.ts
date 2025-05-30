@@ -811,7 +811,7 @@ describe("01-multisig-tests", () => {
         }
     });
 
-    it("should create, sign, and approve a 'unregister member' proposal.", async () => {
+    it("should create, sign, and approve an 'unregister member' proposal.", async () => {
 
     });
 
