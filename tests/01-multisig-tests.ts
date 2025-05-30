@@ -810,4 +810,20 @@ describe("01-multisig-tests", () => {
             }
         }
     });
+
+    it("should create, sign, and approve a 'unregister member' proposal.", async () => {
+
+    });
+
+    it("creating an 'unregister member' proposal should fail if the pubkey is not a member.", async () => {
+
+    });
+
+    it("creating an 'unregister member' proposal should fail if verify_signer_member_id is not provided (MissingVerifyMemberId).", async () => {
+
+    })
+
+    it("creating an 'unregister member' proposal should fail if the verifySignerMember PDA is not provided (MissingVerifyMemberPDA).", async () => {
+
+    });
 });
