@@ -14,31 +14,44 @@ declare_id!("3e2igyWExmDZmJfRpMRwn5mrM838Fam3AMzPYvttxRT8");
 pub mod miming_spoke_solana {
     use super::*;
 
-    pub fn init_multisig_counters(ctx: Context<InitMultisigCountersAccounts>) -> Result<()> {
-        instructions::multisig::init_counters(ctx)
+    pub fn init_multisig_identifiers(ctx: Context<InitMultisigIdentifierAccounts>) -> Result<()> {
+        instructions::multisig::init_identifiers(ctx)
     }
 
     pub fn multisig_create_proposal(
         ctx: Context<CreateMultisigProposalAccounts>,
         name: String,
         action_type: MultisigProposalType,
-        target_pubkey: Pubkey,
+        pubkey: Pubkey,
+        verify_target_member_id: Option<u64>,
     ) -> Result<()> {
-        instructions::multisig::create_proposal(ctx, name, action_type, target_pubkey)
+        instructions::multisig::create_proposal(
+            ctx,
+            name,
+            action_type,
+            pubkey,
+            verify_target_member_id,
+        )
     }
 
     pub fn multisig_sign_proposal(
         ctx: Context<SignMultisigProposalAccounts>,
-        uuid: String,
+        current_proposal_id: u64,
+        verify_signer_member_id: Option<u64>,
     ) -> Result<()> {
-        instructions::multisig::sign_proposal(ctx, uuid)
+        instructions::multisig::sign_proposal(ctx, current_proposal_id, verify_signer_member_id)
     }
 
     pub fn multisig_approve_proposal(
         ctx: Context<ApproveMultisigAccounts>,
-        uuid: String,
+        current_proposal_id: u64,
+        verify_signer_signature_id: u64,
     ) -> Result<()> {
-        instructions::multisig::approve_proposal(ctx, uuid)
+        instructions::multisig::approve_proposal(
+            ctx,
+            current_proposal_id,
+            verify_signer_signature_id,
+        )
     }
 
     pub fn vault_teleport(ctx: Context<Teleport>, amount: u64) -> Result<()> {
@@ -53,6 +66,3 @@ pub mod miming_spoke_solana {
         instructions::staking::thaw(ctx)
     }
 }
-
-#[derive(Accounts)]
-pub struct Initialize {}

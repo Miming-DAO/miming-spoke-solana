@@ -1,320 +1,166 @@
 use crate::contexts::multisig::{
-    ApproveMultisigAccounts, CreateMultisigProposalAccounts, InitMultisigCountersAccounts,
+    ApproveMultisigAccounts, CreateMultisigProposalAccounts, InitMultisigIdentifierAccounts,
     SignMultisigProposalAccounts,
 };
 use crate::errors::MultisigErrorCode;
-use crate::states::multisig::{
-    MultisigMember, MultisigProposal, MultisigProposalType, MultisigStatus,
-};
-use crate::states::{
-    MultisigMemberCounter, MultisigProposalCounter, MultisigSignature, MultisigSignatureCounter,
-};
-use anchor_lang::prelude::*;
-use solana_program::keccak::hash;
+use crate::states::multisig::{MultisigProposalType, MultisigStatus};
+use solana_program::keccak::{hash, Hash};
 
-pub fn generate_uuid_string(
-    signer_key: &Pubkey,
-    unix_timestamp: i64,
-    action_type: &MultisigProposalType,
-    proposal_counter_value: u64,
-    member_counter_value: u64,
-) -> String {
+use anchor_lang::prelude::*;
+
+pub fn generate_uuid_string(signer_key: &Pubkey, unix_timestamp: i64) -> Hash {
     let mut data = Vec::new();
     data.extend_from_slice(signer_key.as_ref());
     data.extend_from_slice(&unix_timestamp.to_le_bytes());
-    data.extend_from_slice(&proposal_counter_value.to_le_bytes());
-    data.extend_from_slice(&member_counter_value.to_le_bytes());
-
-    let enum_value = match action_type {
-        MultisigProposalType::RegisterMember => 0,
-        MultisigProposalType::UnregisterMember => 1,
-    };
-    data.push(enum_value);
 
     let hash_result = hash(&data);
     let uuid_bytes = &hash_result.0[..16];
 
-    uuid_bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    hash(uuid_bytes)
 }
 
-pub fn init_counters(ctx: Context<InitMultisigCountersAccounts>) -> Result<()> {
-    ctx.accounts.proposal_counter.count = 0;
-    ctx.accounts.signature_counter.count = 0;
-    ctx.accounts.member_counter.count = 0;
+pub fn init_identifiers(ctx: Context<InitMultisigIdentifierAccounts>) -> Result<()> {
+    ctx.accounts.proposal_identifier.id = 0;
+    ctx.accounts.signature_identifier.id = 0;
+    ctx.accounts.member_identifier.id = 0;
 
     Ok(())
-}
-
-pub fn get_proposals(
-    proposal_counter: &Account<MultisigProposalCounter>,
-    remaining_accounts: &[AccountInfo],
-    program_id: &Pubkey,
-) -> Vec<MultisigProposal> {
-    let mut proposals: Vec<MultisigProposal> = Vec::new();
-
-    for i in 0..proposal_counter.count {
-        let (proposal_pda, _bump) = Pubkey::find_program_address(
-            &[
-                b"miming_multisig_proposal",
-                (i as u64).to_le_bytes().as_ref(),
-            ],
-            program_id,
-        );
-
-        if let Some(account_info) = remaining_accounts
-            .iter()
-            .find(|acc| acc.key() == proposal_pda)
-        {
-            if let Ok(proposal_account) =
-                MultisigProposal::try_deserialize(&mut &account_info.data.borrow()[..])
-            {
-                proposals.push(proposal_account);
-            }
-        }
-    }
-
-    proposals
-}
-
-pub fn get_signatures(
-    signature_counter: &Account<MultisigSignatureCounter>,
-    remaining_accounts: &[AccountInfo],
-    program_id: &Pubkey,
-) -> Vec<MultisigSignature> {
-    let mut signatures: Vec<MultisigSignature> = Vec::new();
-
-    for i in 0..signature_counter.count {
-        let (signature_pda, _bump) = Pubkey::find_program_address(
-            &[
-                b"miming_multisig_signature",
-                (i as u64).to_le_bytes().as_ref(),
-            ],
-            program_id,
-        );
-
-        if let Some(account_info) = remaining_accounts
-            .iter()
-            .find(|acc| acc.key() == signature_pda)
-        {
-            if let Ok(signature_account) =
-                MultisigSignature::try_deserialize(&mut &account_info.data.borrow()[..])
-            {
-                signatures.push(signature_account);
-            }
-        }
-    }
-
-    signatures
-}
-
-pub fn get_members(
-    member_counter: &Account<MultisigMemberCounter>,
-    remaining_accounts: &[AccountInfo],
-    program_id: &Pubkey,
-) -> Vec<MultisigMember> {
-    let mut members: Vec<MultisigMember> = Vec::new();
-
-    for i in 0..member_counter.count {
-        let (member_pda, _bump) = Pubkey::find_program_address(
-            &[b"miming_multisig_member", (i as u64).to_le_bytes().as_ref()],
-            program_id,
-        );
-
-        if let Some(account_info) = remaining_accounts
-            .iter()
-            .find(|acc| acc.key() == member_pda)
-        {
-            if let Ok(member_account) =
-                MultisigMember::try_deserialize(&mut &account_info.data.borrow()[..])
-            {
-                members.push(member_account);
-            }
-        }
-    }
-
-    members
 }
 
 pub fn create_proposal(
     ctx: Context<CreateMultisigProposalAccounts>,
     name: String,
     action_type: MultisigProposalType,
-    target_pubkey: Pubkey,
+    pubkey: Pubkey,
+    verify_target_member_id: Option<u64>,
+) -> Result<()> {
+    if action_type == MultisigProposalType::UnregisterMember {
+        require!(
+            verify_target_member_id.is_some(),
+            MultisigErrorCode::MissingVerifyMemberId
+        );
+
+        let verify_target_member = &mut ctx.accounts.verify_target_member;
+        match verify_target_member {
+            Some(target_member) => {
+                require!(
+                    target_member.id == verify_target_member_id.unwrap()
+                        && target_member.pubkey == pubkey,
+                    MultisigErrorCode::UnauthorizedMember
+                );
+            }
+            None => return Err(MultisigErrorCode::MissingVerifyMemberPDA.into()),
+        };
+    }
+
+    let proposal_identifier = &mut ctx.accounts.proposal_identifier;
+    proposal_identifier.id += 1;
+
+    let proposal = &mut ctx.accounts.proposal;
+    proposal.id = proposal_identifier.id;
+    proposal.name = name;
+    proposal.action_type = action_type;
+    proposal.pubkey = pubkey;
+    proposal.status = MultisigStatus::Pending;
+
+    Ok(())
+}
+
+pub fn sign_proposal(
+    ctx: Context<SignMultisigProposalAccounts>,
+    current_proposal_id: u64,
+    verify_signer_member_id: Option<u64>,
 ) -> Result<()> {
     let signer_key = ctx.accounts.signer.key();
 
-    if action_type == MultisigProposalType::UnregisterMember {
-        let member_accounts = get_members(
-            &ctx.accounts.member_counter,
-            &ctx.remaining_accounts,
-            ctx.program_id,
-        );
-
-        if member_accounts.len() > 0 {
-            let multisig_member = member_accounts.iter().find(|m| m.pubkey == target_pubkey);
-            require!(multisig_member.is_some(), MultisigErrorCode::NotRegistered);
-        }
-    }
-
-    let proposal = &mut ctx.accounts.proposal;
-    proposal.uuid = generate_uuid_string(
-        &signer_key,
-        Clock::get()?.unix_timestamp,
-        &action_type,
-        ctx.accounts.proposal_counter.count,
-        ctx.accounts.member_counter.count,
+    let current_proposal = &mut ctx.accounts.current_proposal;
+    require!(
+        current_proposal.id == current_proposal_id,
+        MultisigErrorCode::ProposalNotFound
     );
-    proposal.name = name;
-    proposal.action_type = action_type;
-    proposal.target_pubkey = target_pubkey;
-    proposal.status = MultisigStatus::Pending;
-
-    let proposal_counter = &mut ctx.accounts.proposal_counter;
-    proposal_counter.count += 1;
-
-    Ok(())
-}
-
-pub fn sign_proposal(ctx: Context<SignMultisigProposalAccounts>, uuid: String) -> Result<()> {
-    let signer_key = ctx.accounts.signer.key();
-
-    let proposal_accounts = get_proposals(
-        &ctx.accounts.proposal_counter,
-        &ctx.remaining_accounts,
-        ctx.program_id,
+    require!(
+        current_proposal.status == MultisigStatus::Pending,
+        MultisigErrorCode::ProposalAlreadyResolved
     );
 
-    if proposal_accounts.len() > 0 {
-        let multisig_proposal = proposal_accounts.iter().find(|m| m.uuid == uuid);
-        match multisig_proposal {
-            Some(proposal) => {
-                require!(
-                    proposal.status == MultisigStatus::Pending,
-                    MultisigErrorCode::AlreadySigned
-                );
-            }
-            None => return Err(MultisigErrorCode::ProposalNotFound.into()),
-        }
-    }
-
-    let signature_accounts = get_signatures(
-        &ctx.accounts.signature_counter,
-        &ctx.remaining_accounts,
-        ctx.program_id,
-    );
-
-    if signature_accounts.len() > 0 {
-        let multisig_signature = signature_accounts.iter().find(|m| m.pubkey == signer_key);
-
+    let member_identifier = &mut ctx.accounts.member_identifier;
+    if member_identifier.id > 0 {
         require!(
-            multisig_signature.is_none(),
-            MultisigErrorCode::AlreadySigned
+            verify_signer_member_id.is_some(),
+            MultisigErrorCode::MissingVerifyMemberId
         );
+
+        let verify_signer_member = &mut ctx.accounts.verify_signer_member;
+        match verify_signer_member {
+            Some(member) => {
+                require!(
+                    member.id == verify_signer_member_id.unwrap() && member.pubkey == signer_key,
+                    MultisigErrorCode::UnauthorizedMember
+                );
+            }
+            None => return Err(MultisigErrorCode::MissingVerifyMemberPDA.into()),
+        };
     }
 
-    let member_accounts = get_members(
-        &ctx.accounts.member_counter,
-        &ctx.remaining_accounts,
-        ctx.program_id,
-    );
+    let signature_identifier = &mut ctx.accounts.signature_identifier;
+    signature_identifier.id += 1;
 
-    if member_accounts.len() > 0 {
-        let multisig_member = member_accounts.iter().find(|m| m.pubkey == signer_key);
-        require!(multisig_member.is_some(), MultisigErrorCode::NotAMember);
-    }
-
-    let proposal_signatures = &mut ctx.accounts.signature;
-    proposal_signatures.proposal_uuid = uuid.clone();
-    proposal_signatures.pubkey = signer_key;
-
-    let signature_counter = &mut ctx.accounts.signature_counter;
-    signature_counter.count += 1;
+    let signature = &mut ctx.accounts.signature;
+    signature.id = signature_identifier.id;
+    signature.proposal_id = current_proposal_id;
+    signature.no_required_signers = member_identifier.id;
+    signature.no_signatures += if member_identifier.id > 0 { 1 } else { 0 };
+    signature.pubkey = signer_key;
 
     Ok(())
 }
 
-pub fn approve_proposal(ctx: Context<ApproveMultisigAccounts>, uuid: String) -> Result<()> {
+pub fn approve_proposal(
+    ctx: Context<ApproveMultisigAccounts>,
+    current_proposal_id: u64,
+    verify_signer_signature_id: u64,
+) -> Result<()> {
     let signer_key = ctx.accounts.signer.key();
 
-    let proposal_accounts = get_proposals(
-        &ctx.accounts.proposal_counter,
-        &ctx.remaining_accounts,
-        ctx.program_id,
+    let current_proposal = &mut ctx.accounts.current_proposal;
+    require!(
+        current_proposal.id == current_proposal_id,
+        MultisigErrorCode::ProposalNotFound
+    );
+    require!(
+        current_proposal.status == MultisigStatus::Pending,
+        MultisigErrorCode::CannotApproveResolvedProposal
     );
 
-    let mut current_proposal: Option<MultisigProposal> = None;
-
-    if proposal_accounts.len() > 0 {
-        let multisig_proposal = proposal_accounts.iter().find(|m| m.uuid == uuid);
-        match multisig_proposal {
-            Some(proposal) => {
-                current_proposal = Some(proposal.clone());
-
-                require!(
-                    proposal.status == MultisigStatus::Pending,
-                    MultisigErrorCode::AlreadySigned
-                );
-            }
-            None => return Err(MultisigErrorCode::ProposalNotFound.into()),
-        }
-    }
-
-    let mut required_signers: Vec<MultisigMember> = Vec::new();
-    let mut signatures: Vec<Pubkey> = Vec::new();
-
-    let member_accounts = get_members(
-        &ctx.accounts.member_counter,
-        &ctx.remaining_accounts,
-        ctx.program_id,
+    let verify_signer_signature = &mut ctx.accounts.verify_signer_signature;
+    require!(
+        verify_signer_signature.id == verify_signer_signature_id
+            && verify_signer_signature.pubkey == signer_key,
+        MultisigErrorCode::InvalidSignature
+    );
+    require!(
+        verify_signer_signature.no_required_signers == verify_signer_signature.no_signatures,
+        MultisigErrorCode::SignaturesIncomplete
     );
 
-    if member_accounts.len() > 0 {
-        for member in &member_accounts {
-            required_signers.push(member.clone());
+    let member_identifier = &mut ctx.accounts.member_identifier;
+
+    match current_proposal.action_type {
+        MultisigProposalType::RegisterMember => {
+            member_identifier.id += 1;
+
+            let member = &mut ctx.accounts.member;
+            member.id = member_identifier.id;
+            member.proposal_id = current_proposal_id;
+            member.name = current_proposal.name.clone();
+            member.pubkey = current_proposal.pubkey;
+
+            current_proposal.status = MultisigStatus::Approved;
         }
-
-        let multisig_member = member_accounts.iter().find(|m| m.pubkey == signer_key);
-        require!(multisig_member.is_some(), MultisigErrorCode::NotAMember);
-    }
-
-    let signature_accounts = get_signatures(
-        &ctx.accounts.signature_counter,
-        &ctx.remaining_accounts,
-        ctx.program_id,
-    );
-
-    if signature_accounts.len() > 0 {
-        for signature in signature_accounts {
-            signatures.push(signature.pubkey);
+        MultisigProposalType::UnregisterMember => {
+            member_identifier.id -= 1;
         }
-    }
-
-    if required_signers.len() > 0 {
-        for signer in required_signers {
-            if !signatures.contains(&signer.pubkey) {
-                return Err(MultisigErrorCode::IncompleteSignatures.into());
-            }
-        }
-    }
-
-    match current_proposal {
-        Some(proposal) => match proposal.action_type {
-            MultisigProposalType::RegisterMember => {
-                let member = &mut ctx.accounts.member;
-                member.proposal_uuid = uuid.clone();
-                member.name = proposal.name.clone();
-                member.pubkey = signer_key;
-
-                let member_counter = &mut ctx.accounts.member_counter;
-                member_counter.count += 1;
-            }
-            MultisigProposalType::UnregisterMember => {
-                let member_counter = &mut ctx.accounts.member_counter;
-                member_counter.count -= 1;
-            }
-        },
-        None => return Err(MultisigErrorCode::ProposalNotFound.into()),
-    }
+    };
 
     Ok(())
 }

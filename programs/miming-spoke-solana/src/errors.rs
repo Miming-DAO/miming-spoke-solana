@@ -2,29 +2,29 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum MultisigErrorCode {
-    #[msg("This public key is already registered.")]
-    AlreadyRegistered,
+    #[msg("Missing 'verify_member_id' in the request.")]
+    MissingVerifyMemberId,
 
-    #[msg("This public key is not registered.")]
-    NotRegistered,
+    #[msg("Verify member PDA could not be derived from 'verify_member_id'.")]
+    MissingVerifyMemberPDA,
 
-    #[msg("You are not a member of this multisig.")]
-    NotAMember,
+    #[msg("The given public key is not a recognized multisig member.")]
+    UnauthorizedMember,
 
-    #[msg("You are not listed as a required signer.")]
-    NotARequiredSigner,
-
-    #[msg("Proposal has already been approved or rejected.")]
-    AlreadyProcessed,
-
-    #[msg("Proposal not found.")]
+    #[msg("The specified proposal does not exist or is invalid.")]
     ProposalNotFound,
 
-    #[msg("Not all required signatures are present.")]
-    IncompleteSignatures,
+    #[msg("Only pending proposals can be signed.")]
+    ProposalAlreadyResolved,
 
-    #[msg("This signer has already signed.")]
-    AlreadySigned,
+    #[msg("Only pending proposals can be approved.")]
+    CannotApproveResolvedProposal,
+
+    #[msg("The provided signature is invalid or corrupted.")]
+    InvalidSignature,
+
+    #[msg("Proposal cannot proceed; required signatures are incomplete.")]
+    SignaturesIncomplete,
 }
 
 #[error_code]

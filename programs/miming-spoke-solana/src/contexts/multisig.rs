@@ -1,22 +1,21 @@
 use crate::states::multisig::{
-    MultisigMember, MultisigMemberCounter, MultisigProposal, MultisigProposalCounter,
-    MultisigSignature, MultisigSignatureCounter,
+    MultisigIdentifier, MultisigMember, MultisigProposal, MultisigProposalType, MultisigSignature,
 };
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
-pub struct InitMultisigCountersAccounts<'info> {
+pub struct InitMultisigIdentifierAccounts<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
-    #[account(init, payer = signer, space = 8 + 8, seeds = [b"miming_proposal_counter"], bump)]
-    pub proposal_counter: Account<'info, MultisigProposalCounter>,
+    #[account(init, payer = signer, space = 8 + MultisigIdentifier::LEN, seeds = [b"proposal_identifier"], bump)]
+    pub proposal_identifier: Account<'info, MultisigIdentifier>,
 
-    #[account(init, payer = signer, space = 8 + 8, seeds = [b"miming_signature_counter"], bump)]
-    pub signature_counter: Account<'info, MultisigSignatureCounter>,
+    #[account(init, payer = signer, space = 8 + MultisigIdentifier::LEN, seeds = [b"signature_identifier"], bump)]
+    pub signature_identifier: Account<'info, MultisigIdentifier>,
 
-    #[account(init, payer = signer, space = 8 + 8, seeds = [b"miming_member_counter"], bump)]
-    pub member_counter: Account<'info, MultisigMemberCounter>,
+    #[account(init, payer = signer, space = 8 + MultisigIdentifier::LEN, seeds = [b"member_identifier"], bump)]
+    pub member_identifier: Account<'info, MultisigIdentifier>,
 
     pub system_program: Program<'info, System>,
 }
@@ -27,34 +26,22 @@ pub struct CreateMultisigProposalAccounts<'info> {
     pub signer: Signer<'info>,
 
     #[account(mut)]
-    pub proposal_counter: Account<'info, MultisigProposalCounter>,
+    pub proposal_identifier: Account<'info, MultisigIdentifier>,
 
     #[account(
         init_if_needed,
         payer = signer,
         space = 8 + MultisigProposal::LEN,
         seeds = [
-            b"miming_multisig_proposal", 
-            proposal_counter.count.to_le_bytes().as_ref()
+            b"proposal", 
+            proposal_identifier.id.to_le_bytes().as_ref()
         ],
         bump
     )]
     pub proposal: Account<'info, MultisigProposal>,
 
     #[account(mut)]
-    pub member_counter: Account<'info, MultisigMemberCounter>,
-
-    #[account(
-        init_if_needed,
-        payer = signer,
-        space = 8 + MultisigMember::LEN,
-        seeds = [
-            b"miming_multisig_member", 
-            member_counter.count.to_le_bytes().as_ref()
-        ],
-        bump
-    )]
-    pub member: Account<'info, MultisigMember>,
+    pub verify_target_member: Option<Account<'info, MultisigMember>>,
 
     pub system_program: Program<'info, System>,
 }
@@ -65,46 +52,28 @@ pub struct SignMultisigProposalAccounts<'info> {
     pub signer: Signer<'info>,
 
     #[account(mut)]
-    pub proposal_counter: Account<'info, MultisigProposalCounter>,
-
-    #[account(
-        mut,
-        seeds = [
-            b"miming_multisig_proposal", 
-            proposal_counter.count.to_le_bytes().as_ref()
-        ],
-        bump
-    )]
-    pub proposal: Account<'info, MultisigProposal>,
-
-    #[account(mut)]
-    pub signature_counter: Account<'info, MultisigSignatureCounter>,
+    pub signature_identifier: Account<'info, MultisigIdentifier>,
 
     #[account(
         init_if_needed,
         payer = signer,
         space = 8 + MultisigSignature::LEN,
         seeds = [
-            b"miming_multisig_signature", 
-            proposal.uuid.as_bytes(),
-            signature_counter.count.to_le_bytes().as_ref()
+            b"signature", 
+            signature_identifier.id.to_le_bytes().as_ref()
         ],
         bump
     )]
     pub signature: Account<'info, MultisigSignature>,
 
     #[account(mut)]
-    pub member_counter: Account<'info, MultisigMemberCounter>,
+    pub current_proposal: Account<'info, MultisigProposal>,
 
-    #[account(
-        mut,
-        seeds = [
-            b"miming_multisig_member", 
-            member_counter.count.to_le_bytes().as_ref()
-        ],
-        bump
-    )]
-    pub member: Account<'info, MultisigMember>,
+    #[account(mut)]
+    pub member_identifier: Account<'info, MultisigIdentifier>,
+
+    #[account(mut)]
+    pub verify_signer_member: Option<Account<'info, MultisigMember>>,
 
     pub system_program: Program<'info, System>,
 }
@@ -115,48 +84,25 @@ pub struct ApproveMultisigAccounts<'info> {
     pub signer: Signer<'info>,
 
     #[account(mut)]
-    pub proposal_counter: Account<'info, MultisigProposalCounter>,
+    pub member_identifier: Account<'info, MultisigIdentifier>,
 
     #[account(
-        mut,
+        init_if_needed,
+        payer = signer,
+        space = 8 + MultisigMember::LEN,
         seeds = [
-            b"miming_multisig_proposal", 
-            proposal_counter.count.to_le_bytes().as_ref()
-        ],
-        bump
-    )]
-    pub proposal: Account<'info, MultisigProposal>,
-
-    #[account(mut)]
-    pub signature_counter: Account<'info, MultisigSignatureCounter>,
-
-    #[account(
-        mut,
-        seeds = [
-            b"miming_multisig_signature", 
-            proposal.uuid.as_bytes(),
-            signature_counter.count.to_le_bytes().as_ref()
-        ],
-        bump
-    )]
-    pub signature: Account<'info, MultisigSignature>,
-
-    #[account(mut)]
-    pub member_counter: Account<'info, MultisigMemberCounter>,
-
-    #[account(
-        mut,
-        seeds = [
-            b"miming_multisig_member", 
-            member_counter.count.to_le_bytes().as_ref()
+            b"member", 
+            member_identifier.id.to_le_bytes().as_ref()
         ],
         bump,
-        close = closing_account_receiver
     )]
     pub member: Account<'info, MultisigMember>,
 
     #[account(mut)]
-    pub closing_account_receiver: SystemAccount<'info>,
+    pub current_proposal: Account<'info, MultisigProposal>,
+
+    #[account(mut)]
+    pub verify_signer_signature: Account<'info, MultisigSignature>,
 
     pub system_program: Program<'info, System>,
 }
