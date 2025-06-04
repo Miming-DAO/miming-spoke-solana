@@ -1,4 +1,3 @@
-use solana_program::sysvar;
 use {
     anchor_lang::prelude::*,
     anchor_spl::{

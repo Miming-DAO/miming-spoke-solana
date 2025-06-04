@@ -1,5 +1,7 @@
-use crate::contexts::vault::{Teleport, Transfer};
-use crate::errors::VaultErrorCode;
+use crate::{
+    contexts::vault::{Teleport, Transfer},
+    errors::VaultErrorCode,
+};
 use anchor_lang::prelude::*;
 use solana_program::keccak::hash;
 

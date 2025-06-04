@@ -1,166 +1,113 @@
-use crate::contexts::multisig::{
-    ApproveMultisigAccounts, CreateMultisigProposalAccounts, InitMultisigIdentifierAccounts,
-    SignMultisigProposalAccounts,
+use crate::{
+    contexts::multisig::{ApproveProposal, CreateProposal, Initialization, SignProposal},
+    errors::MultisigErrorCode,
+    states::multisig::{Multisig, ProposalStatus, Signers, MAX_SIGNERS, MAX_THRESHOLD},
 };
-use crate::errors::MultisigErrorCode;
-use crate::states::multisig::{MultisigProposalType, MultisigStatus};
-use solana_program::keccak::{hash, Hash};
-
 use anchor_lang::prelude::*;
 
-pub fn generate_uuid_string(signer_key: &Pubkey, unix_timestamp: i64) -> Hash {
-    let mut data = Vec::new();
-    data.extend_from_slice(signer_key.as_ref());
-    data.extend_from_slice(&unix_timestamp.to_le_bytes());
-
-    let hash_result = hash(&data);
-    let uuid_bytes = &hash_result.0[..16];
-
-    hash(uuid_bytes)
-}
-
-pub fn init_identifiers(ctx: Context<InitMultisigIdentifierAccounts>) -> Result<()> {
+pub fn initialization(ctx: Context<Initialization>) -> Result<()> {
     ctx.accounts.proposal_identifier.id = 0;
-    ctx.accounts.signature_identifier.id = 0;
-    ctx.accounts.member_identifier.id = 0;
+
+    let multisig = &mut ctx.accounts.multisig;
+    multisig.name = String::from("System");
+    multisig.threshold = 0;
+    multisig.signers = Vec::new();
 
     Ok(())
 }
-
 pub fn create_proposal(
-    ctx: Context<CreateMultisigProposalAccounts>,
+    ctx: Context<CreateProposal>,
     name: String,
-    action_type: MultisigProposalType,
-    pubkey: Pubkey,
-    verify_target_member_id: Option<u64>,
+    threshold: u8,
+    signers: Vec<Signers>,
 ) -> Result<()> {
-    if action_type == MultisigProposalType::UnregisterMember {
-        require!(
-            verify_target_member_id.is_some(),
-            MultisigErrorCode::MissingVerifyMemberId
-        );
+    require!(
+        threshold <= MAX_THRESHOLD,
+        MultisigErrorCode::ThresholdLimitReached
+    );
 
-        let verify_target_member = &mut ctx.accounts.verify_target_member;
-        match verify_target_member {
-            Some(target_member) => {
-                require!(
-                    target_member.id == verify_target_member_id.unwrap()
-                        && target_member.pubkey == pubkey,
-                    MultisigErrorCode::UnauthorizedMember
-                );
-            }
-            None => return Err(MultisigErrorCode::MissingVerifyMemberPDA.into()),
-        };
-    }
+    require!(
+        signers.len() <= MAX_SIGNERS,
+        MultisigErrorCode::SignerLimitReached
+    );
 
     let proposal_identifier = &mut ctx.accounts.proposal_identifier;
     proposal_identifier.id += 1;
 
+    let current_multisig = &ctx.accounts.current_multisig;
+    let required_signers = current_multisig.signers.iter().map(|d| d.pubkey).collect();
+
     let proposal = &mut ctx.accounts.proposal;
     proposal.id = proposal_identifier.id;
-    proposal.name = name;
-    proposal.action_type = action_type;
-    proposal.pubkey = pubkey;
-    proposal.status = MultisigStatus::Pending;
+    proposal.data = Multisig {
+        name,
+        threshold,
+        signers,
+    };
+    proposal.required_signers = required_signers;
+    proposal.signers = Vec::new();
+    proposal.status = ProposalStatus::Pending;
 
     Ok(())
 }
 
-pub fn sign_proposal(
-    ctx: Context<SignMultisigProposalAccounts>,
-    current_proposal_id: u64,
-    verify_signer_member_id: Option<u64>,
-) -> Result<()> {
+pub fn sign_proposal(ctx: Context<SignProposal>) -> Result<()> {
     let signer_key = ctx.accounts.signer.key();
-
     let current_proposal = &mut ctx.accounts.current_proposal;
+
     require!(
-        current_proposal.id == current_proposal_id,
-        MultisigErrorCode::ProposalNotFound
-    );
-    require!(
-        current_proposal.status == MultisigStatus::Pending,
-        MultisigErrorCode::ProposalAlreadyResolved
+        current_proposal.status == ProposalStatus::Pending,
+        MultisigErrorCode::AlreadyResolved
     );
 
-    let member_identifier = &mut ctx.accounts.member_identifier;
-    if member_identifier.id > 0 {
+    if current_proposal.required_signers.len() > 0 {
         require!(
-            verify_signer_member_id.is_some(),
-            MultisigErrorCode::MissingVerifyMemberId
+            current_proposal.required_signers.contains(&signer_key),
+            MultisigErrorCode::UnauthorizedSigner
         );
-
-        let verify_signer_member = &mut ctx.accounts.verify_signer_member;
-        match verify_signer_member {
-            Some(member) => {
-                require!(
-                    member.id == verify_signer_member_id.unwrap() && member.pubkey == signer_key,
-                    MultisigErrorCode::UnauthorizedMember
-                );
-            }
-            None => return Err(MultisigErrorCode::MissingVerifyMemberPDA.into()),
-        };
     }
 
-    let signature_identifier = &mut ctx.accounts.signature_identifier;
-    signature_identifier.id += 1;
+    if current_proposal.signers.len() > 0 {
+        require!(
+            !current_proposal.signers.contains(&signer_key),
+            MultisigErrorCode::DuplicateSignature
+        );
+    }
 
-    let signature = &mut ctx.accounts.signature;
-    signature.id = signature_identifier.id;
-    signature.proposal_id = current_proposal_id;
-    signature.no_required_signers = member_identifier.id;
-    signature.no_signatures += if member_identifier.id > 0 { 1 } else { 0 };
-    signature.pubkey = signer_key;
+    current_proposal.signers.push(signer_key);
 
     Ok(())
 }
 
-pub fn approve_proposal(
-    ctx: Context<ApproveMultisigAccounts>,
-    current_proposal_id: u64,
-    verify_signer_signature_id: u64,
-) -> Result<()> {
+pub fn approve_proposal(ctx: Context<ApproveProposal>) -> Result<()> {
     let signer_key = ctx.accounts.signer.key();
-
     let current_proposal = &mut ctx.accounts.current_proposal;
+
     require!(
-        current_proposal.id == current_proposal_id,
-        MultisigErrorCode::ProposalNotFound
-    );
-    require!(
-        current_proposal.status == MultisigStatus::Pending,
-        MultisigErrorCode::CannotApproveResolvedProposal
+        current_proposal.status == ProposalStatus::Pending,
+        MultisigErrorCode::AlreadyResolved
     );
 
-    let verify_signer_signature = &mut ctx.accounts.verify_signer_signature;
-    require!(
-        verify_signer_signature.id == verify_signer_signature_id
-            && verify_signer_signature.pubkey == signer_key,
-        MultisigErrorCode::InvalidSignature
-    );
-    require!(
-        verify_signer_signature.no_required_signers == verify_signer_signature.no_signatures,
-        MultisigErrorCode::SignaturesIncomplete
-    );
+    if current_proposal.signers.len() > 0 {
+        require!(
+            current_proposal.signers.iter().any(|s| *s == signer_key),
+            MultisigErrorCode::UnauthorizedSigner
+        );
+    }
 
-    let member_identifier = &mut ctx.accounts.member_identifier;
+    let all_signed = current_proposal
+        .required_signers
+        .iter()
+        .all(|req| current_proposal.signers.contains(req));
 
-    match current_proposal.action_type {
-        MultisigProposalType::RegisterMember => {
-            member_identifier.id += 1;
+    require!(all_signed, MultisigErrorCode::InsufficientSignatures);
 
-            let member = &mut ctx.accounts.member;
-            member.id = member_identifier.id;
-            member.proposal_id = current_proposal_id;
-            member.name = current_proposal.name.clone();
-            member.pubkey = current_proposal.pubkey;
+    let current_multisig = &mut ctx.accounts.current_multisig;
+    current_multisig.name = current_proposal.data.name.clone();
+    current_multisig.threshold = current_proposal.data.threshold;
+    current_multisig.signers = current_proposal.data.signers.clone();
 
-            current_proposal.status = MultisigStatus::Approved;
-        }
-        MultisigProposalType::UnregisterMember => {
-            member_identifier.id -= 1;
-        }
-    };
+    current_proposal.status = ProposalStatus::Approved;
 
     Ok(())
 }

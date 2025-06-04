@@ -1,12 +1,11 @@
+use anchor_lang::prelude::*;
+
 pub mod contexts;
 pub mod errors;
 pub mod instructions;
 pub mod states;
 
-use anchor_lang::prelude::*;
-
-use crate::contexts::*;
-use crate::states::MultisigProposalType;
+use crate::{contexts::*, states::Signers};
 
 declare_id!("3e2igyWExmDZmJfRpMRwn5mrM838Fam3AMzPYvttxRT8");
 
@@ -14,44 +13,25 @@ declare_id!("3e2igyWExmDZmJfRpMRwn5mrM838Fam3AMzPYvttxRT8");
 pub mod miming_spoke_solana {
     use super::*;
 
-    pub fn init_multisig_identifiers(ctx: Context<InitMultisigIdentifierAccounts>) -> Result<()> {
-        instructions::multisig::init_identifiers(ctx)
+    pub fn initialization(ctx: Context<Initialization>) -> Result<()> {
+        instructions::multisig::initialization(ctx)
     }
 
     pub fn multisig_create_proposal(
-        ctx: Context<CreateMultisigProposalAccounts>,
+        ctx: Context<CreateProposal>,
         name: String,
-        action_type: MultisigProposalType,
-        pubkey: Pubkey,
-        verify_target_member_id: Option<u64>,
+        threshold: u8,
+        signers: Vec<Signers>,
     ) -> Result<()> {
-        instructions::multisig::create_proposal(
-            ctx,
-            name,
-            action_type,
-            pubkey,
-            verify_target_member_id,
-        )
+        instructions::multisig::create_proposal(ctx, name, threshold, signers)
     }
 
-    pub fn multisig_sign_proposal(
-        ctx: Context<SignMultisigProposalAccounts>,
-        current_proposal_id: u64,
-        verify_signer_member_id: Option<u64>,
-    ) -> Result<()> {
-        instructions::multisig::sign_proposal(ctx, current_proposal_id, verify_signer_member_id)
+    pub fn multisig_sign_proposal(ctx: Context<SignProposal>) -> Result<()> {
+        instructions::multisig::sign_proposal(ctx)
     }
 
-    pub fn multisig_approve_proposal(
-        ctx: Context<ApproveMultisigAccounts>,
-        current_proposal_id: u64,
-        verify_signer_signature_id: u64,
-    ) -> Result<()> {
-        instructions::multisig::approve_proposal(
-            ctx,
-            current_proposal_id,
-            verify_signer_signature_id,
-        )
+    pub fn multisig_approve_proposal(ctx: Context<ApproveProposal>) -> Result<()> {
+        instructions::multisig::approve_proposal(ctx)
     }
 
     pub fn vault_teleport(ctx: Context<Teleport>, amount: u64) -> Result<()> {

@@ -2,29 +2,26 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum MultisigErrorCode {
-    #[msg("Missing 'verify_member_id' in the request.")]
-    MissingVerifyMemberId,
+    #[msg("The maximum threshold for this proposal has been reached.")]
+    ThresholdLimitReached,
 
-    #[msg("Verify member PDA could not be derived from 'verify_member_id'.")]
-    MissingVerifyMemberPDA,
+    #[msg("The maximum number of allowed signers has been reached.")]
+    SignerLimitReached,
 
-    #[msg("The given public key is not a recognized multisig member.")]
+    #[msg("The proposal has already been resolved and cannot be modified.")]
+    AlreadyResolved,
+
+    #[msg("The provided public key is not authorized as a signer.")]
+    UnauthorizedSigner,
+
+    #[msg("The provided public key is not recognized as a member.")]
     UnauthorizedMember,
 
-    #[msg("The specified proposal does not exist or is invalid.")]
-    ProposalNotFound,
+    #[msg("This public key has already submitted a signature.")]
+    DuplicateSignature,
 
-    #[msg("Only pending proposals can be signed.")]
-    ProposalAlreadyResolved,
-
-    #[msg("Only pending proposals can be approved.")]
-    CannotApproveResolvedProposal,
-
-    #[msg("The provided signature is invalid or corrupted.")]
-    InvalidSignature,
-
-    #[msg("Proposal cannot proceed; required signatures are incomplete.")]
-    SignaturesIncomplete,
+    #[msg("The required number of signatures has not yet been collected.")]
+    InsufficientSignatures,
 }
 
 #[error_code]

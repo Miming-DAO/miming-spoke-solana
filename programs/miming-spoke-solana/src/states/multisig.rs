@@ -1,91 +1,82 @@
 use anchor_lang::prelude::*;
 
-pub const STRING_LEN: usize = 64;
-pub const PUBKEY_SIZE: usize = 32;
-pub const ENUM_SIZE: usize = 1;
-pub const U64_SIZE: usize = 8;
 pub const DISCRIMINATOR: usize = 8;
 
-#[account]
-pub struct MultisigIdentifier {
-    pub id: u64,
-}
+pub const STRING_LEN: usize = 64;
+pub const U8_SIZE: usize = 1;
+pub const U64_SIZE: usize = 8;
+pub const ENUM_SIZE: usize = 1;
+pub const VEC_SIZE: usize = 8;
+pub const PUBKEY_SIZE: usize = 32;
 
-impl MultisigIdentifier {
-    pub const LEN: usize = 8 + 
-        U64_SIZE; // id
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
+pub struct Signers {
+    pub name: String,
+    pub pubkey: Pubkey,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-pub enum MultisigStatus {
+pub struct Multisig {
+    pub name: String,
+    pub threshold: u8,
+    pub signers: Vec<Signers>,
+}
+
+pub const MAX_THRESHOLD: u8 = 10;
+pub const MAX_SIGNERS: usize = 10;
+
+pub const MULTISIG_SIGNERS_SIZE: usize = DISCRIMINATOR +
+    STRING_LEN + // name
+    PUBKEY_SIZE; // pubkey
+
+pub const MULTISIG_SIZE: usize = DISCRIMINATOR +
+    STRING_LEN + // name
+    U8_SIZE + // threshold
+    VEC_SIZE + (MAX_SIGNERS * MULTISIG_SIGNERS_SIZE); // data
+
+#[account]
+pub struct IdentifierAccount {
+    pub id: u64,
+}
+
+impl IdentifierAccount {
+    pub const LEN: usize = DISCRIMINATOR + U64_SIZE; // id
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
+pub enum ProposalStatus {
     Pending,
     Approved,
-    Rejected,
-    Unregister,
-}
-
-impl Default for MultisigStatus {
-    fn default() -> Self {
-        MultisigStatus::Pending
-    }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-pub enum MultisigProposalType {
-    RegisterMember,
-    UnregisterMember,
 }
 
 #[account]
-pub struct MultisigProposal {
+pub struct ProposalAccount {
     pub id: u64,
-    pub name: String,
-    pub action_type: MultisigProposalType,
-    pub pubkey: Pubkey,
-    pub status: MultisigStatus,
+    pub data: Multisig,
+    pub required_signers: Vec<Pubkey>,
+    pub signers: Vec<Pubkey>,
+    pub status: ProposalStatus,
 }
 
-impl MultisigProposal {
-    pub const LEN: usize = 8 +
+impl ProposalAccount {
+    pub const LEN: usize = DISCRIMINATOR + 
         U64_SIZE + // id
-        STRING_LEN + // name
-        ENUM_SIZE + // action_type
-        PUBKEY_SIZE + // target_pubkey
+        MULTISIG_SIZE + // data
+        VEC_SIZE + (MAX_SIGNERS * PUBKEY_SIZE) +  // required_signers
+        VEC_SIZE + (MAX_SIGNERS * PUBKEY_SIZE) +  // signers
         ENUM_SIZE; // status
 }
 
 #[account]
-pub struct MultisigSignature {
-    pub id: u64,
-    pub proposal_id: u64,
-    pub no_required_signers: u64,
-    pub no_signatures: u64,
-    pub pubkey: Pubkey,
-}
-
-impl MultisigSignature {
-    pub const LEN: usize = 8 + 
-        U64_SIZE + // id
-        U64_SIZE + // proposal_id
-        U64_SIZE + // no_required_signers
-        U64_SIZE + // no_signatures
-        PUBKEY_SIZE;  // pubkey
-}
-
-#[account]
-pub struct MultisigMember {
-    pub id: u64,
-    pub proposal_id: u64,
+pub struct MultisigAccount {
     pub name: String,
-    pub pubkey: Pubkey,
+    pub threshold: u8,
+    pub signers: Vec<Signers>,
 }
 
-impl MultisigMember {
-    pub const LEN: usize = 8 + 
-        U64_SIZE + // id
-        U64_SIZE + // proposal_id
+impl MultisigAccount {
+    pub const LEN: usize = DISCRIMINATOR + 
         STRING_LEN + // name
-        PUBKEY_SIZE; // pubkey
-
-    pub const MAX_MEMBER_SIZE: usize = 5;
+        U8_SIZE + // threshold
+        VEC_SIZE + (MAX_SIGNERS * MULTISIG_SIGNERS_SIZE); // signers
 }

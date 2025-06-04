@@ -1,108 +1,75 @@
-use crate::states::multisig::{
-    MultisigIdentifier, MultisigMember, MultisigProposal, MultisigProposalType, MultisigSignature,
-};
+use crate::states::multisig::{IdentifierAccount, MultisigAccount, ProposalAccount};
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
-pub struct InitMultisigIdentifierAccounts<'info> {
+pub struct Initialization<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
-    #[account(init, payer = signer, space = 8 + MultisigIdentifier::LEN, seeds = [b"proposal_identifier"], bump)]
-    pub proposal_identifier: Account<'info, MultisigIdentifier>,
+    #[account(init, payer = signer, space = 8 + IdentifierAccount::LEN, seeds = [b"proposal_identifier"], bump)]
+    pub proposal_identifier: Account<'info, IdentifierAccount>,
 
-    #[account(init, payer = signer, space = 8 + MultisigIdentifier::LEN, seeds = [b"signature_identifier"], bump)]
-    pub signature_identifier: Account<'info, MultisigIdentifier>,
-
-    #[account(init, payer = signer, space = 8 + MultisigIdentifier::LEN, seeds = [b"member_identifier"], bump)]
-    pub member_identifier: Account<'info, MultisigIdentifier>,
+    #[account(
+        init_if_needed,
+        payer = signer,
+        space = 8 + MultisigAccount::LEN,
+        seeds = [
+            b"multisig"
+        ],
+        bump
+    )]
+    pub multisig: Account<'info, MultisigAccount>,
 
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct CreateMultisigProposalAccounts<'info> {
+pub struct CreateProposal<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
     #[account(mut)]
-    pub proposal_identifier: Account<'info, MultisigIdentifier>,
+    pub current_multisig: Account<'info, MultisigAccount>,
+
+    #[account(mut)]
+    pub proposal_identifier: Account<'info, IdentifierAccount>,
 
     #[account(
         init_if_needed,
         payer = signer,
-        space = 8 + MultisigProposal::LEN,
+        space = 8 + ProposalAccount::LEN,
         seeds = [
             b"proposal", 
             proposal_identifier.id.to_le_bytes().as_ref()
         ],
         bump
     )]
-    pub proposal: Account<'info, MultisigProposal>,
-
-    #[account(mut)]
-    pub verify_target_member: Option<Account<'info, MultisigMember>>,
+    pub proposal: Account<'info, ProposalAccount>,
 
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct SignMultisigProposalAccounts<'info> {
+pub struct SignProposal<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
     #[account(mut)]
-    pub signature_identifier: Account<'info, MultisigIdentifier>,
-
-    #[account(
-        init_if_needed,
-        payer = signer,
-        space = 8 + MultisigSignature::LEN,
-        seeds = [
-            b"signature", 
-            signature_identifier.id.to_le_bytes().as_ref()
-        ],
-        bump
-    )]
-    pub signature: Account<'info, MultisigSignature>,
-
-    #[account(mut)]
-    pub current_proposal: Account<'info, MultisigProposal>,
-
-    #[account(mut)]
-    pub member_identifier: Account<'info, MultisigIdentifier>,
-
-    #[account(mut)]
-    pub verify_signer_member: Option<Account<'info, MultisigMember>>,
+    pub current_proposal: Account<'info, ProposalAccount>,
 
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct ApproveMultisigAccounts<'info> {
+pub struct ApproveProposal<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
     #[account(mut)]
-    pub member_identifier: Account<'info, MultisigIdentifier>,
-
-    #[account(
-        init_if_needed,
-        payer = signer,
-        space = 8 + MultisigMember::LEN,
-        seeds = [
-            b"member", 
-            member_identifier.id.to_le_bytes().as_ref()
-        ],
-        bump,
-    )]
-    pub member: Account<'info, MultisigMember>,
+    pub current_proposal: Account<'info, ProposalAccount>,
 
     #[account(mut)]
-    pub current_proposal: Account<'info, MultisigProposal>,
-
-    #[account(mut)]
-    pub verify_signer_signature: Account<'info, MultisigSignature>,
+    pub current_multisig: Account<'info, MultisigAccount>,
 
     pub system_program: Program<'info, System>,
 }
