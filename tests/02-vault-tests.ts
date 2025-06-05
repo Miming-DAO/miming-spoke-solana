@@ -15,7 +15,7 @@ const setupTestVariables = async () => {
     const teleporter = Keypair.generate();
 
     const [vaultPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("miming_vault")],
+        [Buffer.from("vault")],
         program.programId
     );
 
