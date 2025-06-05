@@ -1,13 +1,13 @@
 use anchor_lang::prelude::*;
-
-pub const DISCRIMINATOR: usize = 8;
-
-pub const STRING_LEN: usize = 64;
-pub const U8_SIZE: usize = 1;
-pub const U64_SIZE: usize = 8;
-pub const ENUM_SIZE: usize = 1;
-pub const VEC_SIZE: usize = 8;
-pub const PUBKEY_SIZE: usize = 32;
+use crate::{
+    constants::{
+        DISCRIMINATOR, 
+        STRING_LEN, U8_SIZE, U64_SIZE, 
+        ENUM_SIZE, VEC_SIZE, 
+        PUBKEY_SIZE,
+    },
+    IdentifierAccount
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub struct Signers {
@@ -34,31 +34,22 @@ pub const MULTISIG_SIZE: usize = DISCRIMINATOR +
     U8_SIZE + // threshold
     VEC_SIZE + (MAX_SIGNERS * MULTISIG_SIGNERS_SIZE); // data
 
-#[account]
-pub struct IdentifierAccount {
-    pub id: u64,
-}
-
-impl IdentifierAccount {
-    pub const LEN: usize = DISCRIMINATOR + U64_SIZE; // id
-}
-
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-pub enum ProposalStatus {
+pub enum MultisigProposalStatus {
     Pending,
     Approved,
 }
 
 #[account]
-pub struct ProposalAccount {
+pub struct MultisigProposalAccount {
     pub id: u64,
     pub data: Multisig,
     pub required_signers: Vec<Pubkey>,
     pub signers: Vec<Pubkey>,
-    pub status: ProposalStatus,
+    pub status: MultisigProposalStatus,
 }
 
-impl ProposalAccount {
+impl MultisigProposalAccount {
     pub const LEN: usize = DISCRIMINATOR + 
         U64_SIZE + // id
         MULTISIG_SIZE + // data
@@ -82,7 +73,7 @@ impl MultisigAccount {
 }
 
 #[derive(Accounts)]
-pub struct Initialization<'info> {
+pub struct MultisigInitialization<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
@@ -104,7 +95,7 @@ pub struct Initialization<'info> {
 }
 
 #[derive(Accounts)]
-pub struct CreateProposal<'info> {
+pub struct MultisigCreateProposal<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
@@ -117,36 +108,36 @@ pub struct CreateProposal<'info> {
     #[account(
         init_if_needed,
         payer = signer,
-        space = 8 + ProposalAccount::LEN,
+        space = 8 + MultisigProposalAccount::LEN,
         seeds = [
             b"proposal", 
             proposal_identifier.id.to_le_bytes().as_ref()
         ],
         bump
     )]
-    pub proposal: Account<'info, ProposalAccount>,
+    pub proposal: Account<'info, MultisigProposalAccount>,
 
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct SignProposal<'info> {
+pub struct MultisigSignProposal<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
     #[account(mut)]
-    pub current_proposal: Account<'info, ProposalAccount>,
+    pub current_proposal: Account<'info, MultisigProposalAccount>,
 
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct ApproveProposal<'info> {
+pub struct MultisigApproveProposal<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
     #[account(mut)]
-    pub current_proposal: Account<'info, ProposalAccount>,
+    pub current_proposal: Account<'info, MultisigProposalAccount>,
 
     #[account(mut)]
     pub current_multisig: Account<'info, MultisigAccount>,
@@ -178,7 +169,7 @@ pub enum MultisigErrorCode {
     InsufficientSignatures,
 }
 
-pub fn initialization(ctx: Context<Initialization>) -> Result<()> {
+pub fn initialize(ctx: Context<MultisigInitialization>) -> Result<()> {
     ctx.accounts.proposal_identifier.id = 0;
 
     let multisig = &mut ctx.accounts.multisig;
@@ -190,7 +181,7 @@ pub fn initialization(ctx: Context<Initialization>) -> Result<()> {
 }
 
 pub fn create_proposal(
-    ctx: Context<CreateProposal>,
+    ctx: Context<MultisigCreateProposal>,
     name: String,
     threshold: u8,
     signers: Vec<Signers>,
@@ -220,17 +211,17 @@ pub fn create_proposal(
     };
     proposal.required_signers = required_signers;
     proposal.signers = Vec::new();
-    proposal.status = ProposalStatus::Pending;
+    proposal.status = MultisigProposalStatus::Pending;
 
     Ok(())
 }
 
-pub fn sign_proposal(ctx: Context<SignProposal>) -> Result<()> {
+pub fn sign_proposal(ctx: Context<MultisigSignProposal>) -> Result<()> {
     let signer_key = ctx.accounts.signer.key();
     let current_proposal = &mut ctx.accounts.current_proposal;
 
     require!(
-        current_proposal.status == ProposalStatus::Pending,
+        current_proposal.status == MultisigProposalStatus::Pending,
         MultisigErrorCode::AlreadyResolved
     );
 
@@ -253,12 +244,12 @@ pub fn sign_proposal(ctx: Context<SignProposal>) -> Result<()> {
     Ok(())
 }
 
-pub fn approve_proposal(ctx: Context<ApproveProposal>) -> Result<()> {
+pub fn approve_proposal(ctx: Context<MultisigApproveProposal>) -> Result<()> {
     let signer_key = ctx.accounts.signer.key();
     let current_proposal = &mut ctx.accounts.current_proposal;
 
     require!(
-        current_proposal.status == ProposalStatus::Pending,
+        current_proposal.status == MultisigProposalStatus::Pending,
         MultisigErrorCode::AlreadyResolved
     );
 
@@ -281,7 +272,7 @@ pub fn approve_proposal(ctx: Context<ApproveProposal>) -> Result<()> {
     current_multisig.threshold = current_proposal.data.threshold;
     current_multisig.signers = current_proposal.data.signers.clone();
 
-    current_proposal.status = ProposalStatus::Approved;
+    current_proposal.status = MultisigProposalStatus::Approved;
 
     Ok(())
 }

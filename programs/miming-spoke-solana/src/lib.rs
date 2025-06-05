@@ -1,9 +1,11 @@
+pub mod constants;
 pub mod multisig;
 pub mod staking;
 pub mod vault;
 
 use anchor_lang::prelude::*;
 
+use constants::*;
 use multisig::*;
 use staking::*;
 use vault::*;
@@ -14,12 +16,12 @@ declare_id!("3e2igyWExmDZmJfRpMRwn5mrM838Fam3AMzPYvttxRT8");
 pub mod miming_spoke_solana {
     use super::*;
 
-    pub fn initialization(ctx: Context<Initialization>) -> Result<()> {
-        multisig::initialization(ctx)
+    pub fn multisig_initialize(ctx: Context<MultisigInitialization>) -> Result<()> {
+        multisig::initialize(ctx)
     }
 
     pub fn multisig_create_proposal(
-        ctx: Context<CreateProposal>,
+        ctx: Context<MultisigCreateProposal>,
         name: String,
         threshold: u8,
         signers: Vec<Signers>,
@@ -27,11 +29,11 @@ pub mod miming_spoke_solana {
         multisig::create_proposal(ctx, name, threshold, signers)
     }
 
-    pub fn multisig_sign_proposal(ctx: Context<SignProposal>) -> Result<()> {
+    pub fn multisig_sign_proposal(ctx: Context<MultisigSignProposal>) -> Result<()> {
         multisig::sign_proposal(ctx)
     }
 
-    pub fn multisig_approve_proposal(ctx: Context<ApproveProposal>) -> Result<()> {
+    pub fn multisig_approve_proposal(ctx: Context<MultisigApproveProposal>) -> Result<()> {
         multisig::approve_proposal(ctx)
     }
 
@@ -46,4 +48,13 @@ pub mod miming_spoke_solana {
     pub fn vault_teleport(ctx: Context<Teleport>, amount: u64) -> Result<()> {
         vault::teleport(ctx, amount)
     }
+}
+
+#[account]
+pub struct IdentifierAccount {
+    pub id: u64,
+}
+
+impl IdentifierAccount {
+    pub const LEN: usize = DISCRIMINATOR + U64_SIZE; // id
 }

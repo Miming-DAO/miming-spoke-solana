@@ -30,7 +30,7 @@ describe("01-multisig-tests", () => {
 
         await sleep(2000);
 
-        await program.methods.initialization()
+        await program.methods.multisigInitialize()
             .accounts({
                 signer: signer.publicKey,
                 proposalIdentifier: proposalIdentifierPda,
@@ -81,7 +81,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(5);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -98,7 +98,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(5);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -116,7 +116,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const approvedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const approvedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(approvedProposal.data.name).to.equal(name);
         expect(approvedProposal.data.threshold).equal(5);
         expect(approvedProposal.data.signers).to.deep.equal(signers);
@@ -259,7 +259,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(5);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -281,7 +281,7 @@ describe("01-multisig-tests", () => {
             signersArray.push(signer.pubkey);
         };
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(5);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -334,7 +334,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(5);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -356,7 +356,7 @@ describe("01-multisig-tests", () => {
             signersArray.push(signer.pubkey);
         };
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(5);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -374,7 +374,7 @@ describe("01-multisig-tests", () => {
             .signers([firstSigners[0].keypair])
             .rpc();
 
-        const approvedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const approvedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(approvedProposal.data.name).to.equal(name);
         expect(approvedProposal.data.threshold).equal(5);
         expect(approvedProposal.data.signers).to.deep.equal(signers);
@@ -447,7 +447,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(5);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -507,7 +507,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(5);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -529,7 +529,7 @@ describe("01-multisig-tests", () => {
             signersArray.push(signer.pubkey);
         };
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(5);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -600,7 +600,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(7);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -622,7 +622,7 @@ describe("01-multisig-tests", () => {
             signersArray.push(signer.pubkey);
         };
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(7);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -640,7 +640,7 @@ describe("01-multisig-tests", () => {
             .signers([secondSigners[0].keypair])
             .rpc();
 
-        const approvedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const approvedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(approvedProposal.data.name).to.equal(name);
         expect(approvedProposal.data.threshold).equal(7);
         expect(approvedProposal.data.signers).to.deep.equal(signers);
@@ -703,7 +703,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(4);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -725,7 +725,7 @@ describe("01-multisig-tests", () => {
             signersArray.push(signer.pubkey);
         };
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(4);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -743,7 +743,7 @@ describe("01-multisig-tests", () => {
             .signers([thirdSigners[0].keypair])
             .rpc();
 
-        const approvedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const approvedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(approvedProposal.data.name).to.equal(name);
         expect(approvedProposal.data.threshold).equal(4);
         expect(approvedProposal.data.signers).to.deep.equal(signers);
@@ -821,7 +821,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(4);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -843,7 +843,7 @@ describe("01-multisig-tests", () => {
             signersArray.push(signer.pubkey);
         };
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(4);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -904,7 +904,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(3);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -921,7 +921,7 @@ describe("01-multisig-tests", () => {
             .signers([fourthSigners[0].keypair])
             .rpc();
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(3);
         expect(signedProposal.data.signers).to.deep.equal(signers);

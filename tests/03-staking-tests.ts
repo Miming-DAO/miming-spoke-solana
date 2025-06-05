@@ -34,12 +34,12 @@ const setupTestVariables = async () => {
     const stakerToken = stakerTokenAccount.address;
 
     const [stakingConfigPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("miming_staking_config")],
+        [Buffer.from("staking_config")],
         program.programId
     );
 
     const [stakingRegistryPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("miming_staking_registry"), staker.publicKey.toBuffer()],
+        [Buffer.from("staking_registry"), staker.publicKey.toBuffer()],
         program.programId
     );
 
@@ -85,7 +85,7 @@ describe("03-staking-tests", () => {
 
         expect(isFrozen).to.be.true;
 
-        const stakingRegistry = await program.account.stakingRegistry.fetch(variables.stakingRegistryPda)
+        const stakingRegistry = await program.account.stakingRegistryAccount.fetch(variables.stakingRegistryPda)
         expect(stakingRegistry.referenceId).to.equals("12345")
     });
 
@@ -129,7 +129,7 @@ describe("03-staking-tests", () => {
 
         let stakingRegistry;
         try {
-            stakingRegistry = await program.account.stakingRegistry.fetch(variables.stakingRegistryPda);
+            stakingRegistry = await program.account.stakingRegistryAccount.fetch(variables.stakingRegistryPda);
         } catch (err) {
             stakingRegistry = null;
         }
@@ -194,7 +194,7 @@ describe("03-staking-tests", () => {
         const stakerTokenInfoAfterThawing = await getAccount(connection, variables.stakerToken);
         expect(stakerTokenInfoAfterThawing.isFrozen).to.be.false;
 
-        const stakingRegistry = await program.account.stakingRegistry.fetch(variables.stakingRegistryPda)
+        const stakingRegistry = await program.account.stakingRegistryAccount.fetch(variables.stakingRegistryPda)
         expect(stakingRegistry.referenceId).to.equals("")
     });
 
@@ -257,7 +257,7 @@ describe("03-staking-tests", () => {
         const stakerTokenInfoAfterThawing = await getAccount(connection, variables.stakerToken);
         expect(stakerTokenInfoAfterThawing.isFrozen).to.be.false;
 
-        const stakingRegistry = await program.account.stakingRegistry.fetch(variables.stakingRegistryPda)
+        const stakingRegistry = await program.account.stakingRegistryAccount.fetch(variables.stakingRegistryPda)
         expect(stakingRegistry.referenceId).to.equals("")
 
         const stakerTokenBalanceAfterThawed = await connection.getTokenAccountBalance(variables.stakerToken);
@@ -286,7 +286,7 @@ describe("03-staking-tests", () => {
 
         expect(isFrozen).to.be.true;
 
-        const updatedStakingRegistry = await program.account.stakingRegistry.fetch(variables.stakingRegistryPda)
+        const updatedStakingRegistry = await program.account.stakingRegistryAccount.fetch(variables.stakingRegistryPda)
         expect(updatedStakingRegistry.referenceId).to.equals("12345")
     });
 });

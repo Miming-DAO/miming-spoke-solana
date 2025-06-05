@@ -5,11 +5,11 @@ use anchor_spl::{
 };
 
 #[account]
-pub struct StakingConfig {
+pub struct StakingConfigAccount {
     pub min_staking_amount: u64,
 }
 
-impl Default for StakingConfig {
+impl Default for StakingConfigAccount {
     fn default() -> Self {
         Self {
             min_staking_amount: 10_000,
@@ -17,17 +17,17 @@ impl Default for StakingConfig {
     }
 }
 
-impl StakingConfig {
+impl StakingConfigAccount {
     pub const SIZE_U64: usize = 8;
     pub const LEN: usize = 8 + Self::SIZE_U64; // min_staking_amount
 }
 
 #[account]
-pub struct StakingRegistry {
+pub struct StakingRegistryAccount {
     pub reference_id: String,
 }
 
-impl StakingRegistry {
+impl StakingRegistryAccount {
     pub const SIZE_STRING: usize = 8 + 64;
     pub const LEN: usize = 8 + Self::SIZE_STRING; // reference_id
 }
@@ -53,23 +53,23 @@ pub struct Freeze<'info> {
     #[account(
         init_if_needed,
         payer = staker,
-        space = 8 + StakingConfig::LEN,
-        seeds = [b"miming_staking_config"],
+        space = 8 + StakingConfigAccount::LEN,
+        seeds = [b"staking_config"],
         bump
     )]
-    pub staking_config: Account<'info, StakingConfig>,
+    pub staking_config: Account<'info, StakingConfigAccount>,
 
     #[account(
         init_if_needed,
         payer = staker,
-        space = 8 + StakingRegistry::LEN,
+        space = 8 + StakingRegistryAccount::LEN,
         seeds = [
-            b"miming_staking_registry",
+            b"staking_registry",
             staker.key().as_ref(),
         ],
         bump
     )]
-    pub staking_registry: Account<'info, StakingRegistry>,
+    pub staking_registry: Account<'info, StakingRegistryAccount>,
 
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -96,20 +96,20 @@ pub struct Thaw<'info> {
 
     #[account(
         mut,
-        seeds = [b"miming_staking_config"],
+        seeds = [b"staking_config"],
         bump
     )]
-    pub staking_config: Account<'info, StakingConfig>,
+    pub staking_config: Account<'info, StakingConfigAccount>,
 
     #[account(
         mut,
         seeds = [
-            b"miming_staking_registry",
+            b"staking_registry",
             staker.key().as_ref(),
         ],
         bump
     )]
-    pub staking_registry: Account<'info, StakingRegistry>,
+    pub staking_registry: Account<'info, StakingRegistryAccount>,
 
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
