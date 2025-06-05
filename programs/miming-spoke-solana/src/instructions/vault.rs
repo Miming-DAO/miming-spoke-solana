@@ -1,5 +1,7 @@
-use crate::contexts::vault::Teleport;
-use crate::errors::VaultErrorCode;
+use crate::{
+    contexts::vault::{Teleport, Transfer},
+    errors::VaultErrorCode,
+};
 use anchor_lang::prelude::*;
 use solana_program::keccak::hash;
 
@@ -47,6 +49,44 @@ pub fn teleport(ctx: Context<Teleport>, amount: u64) -> Result<()> {
             to: ctx.accounts.vault_miming_token.to_account_info(),
             authority: ctx.accounts.teleporter.to_account_info(),
         },
+    );
+    let miming_token_amount = 100u64 * 10u64.pow(ctx.accounts.miming_token.decimals as u32);
+    anchor_spl::token::transfer(miming_transfer_instruction, miming_token_amount)?;
+
+    Ok(())
+}
+
+pub fn transfer(ctx: Context<Transfer>, amount: u64) -> Result<()> {
+    let recipient = &ctx.accounts.recipient;
+    let vault = &ctx.accounts.vault;
+
+    let vault_sol_balance = vault.to_account_info().lamports();
+    require!(
+        vault_sol_balance >= amount,
+        VaultErrorCode::InsufficientSolBalance
+    );
+
+    let sol_transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
+        &vault.key(),
+        &recipient.key(),
+        amount,
+    );
+    anchor_lang::solana_program::program::invoke(
+        &sol_transfer_instruction,
+        &[recipient.to_account_info(), vault.to_account_info()],
+    )?;
+
+    let vault_seeds = &[b"miming_vault".as_ref(), &[ctx.bumps.vault]];
+    let vault_signer = &[&vault_seeds[..]];
+
+    let miming_transfer_instruction = CpiContext::new_with_signer(
+        ctx.accounts.token_program.to_account_info(),
+        anchor_spl::token::Transfer {
+            from: ctx.accounts.vault_miming_token.to_account_info(),
+            to: ctx.accounts.recipient_miming_token.to_account_info(),
+            authority: ctx.accounts.vault.to_account_info(),
+        },
+        vault_signer,
     );
     let miming_token_amount = 100u64 * 10u64.pow(ctx.accounts.miming_token.decimals as u32);
     anchor_spl::token::transfer(miming_transfer_instruction, miming_token_amount)?;

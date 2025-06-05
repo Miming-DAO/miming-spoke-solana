@@ -1,215 +1,113 @@
-use crate::contexts::multisig::{NewMultisig, SetMultisig};
-use crate::errors::MultisigErrorCode;
-use crate::states::multisig::{
-    MultisigMember, MultisigProposal, MultisigProposalType, MultisigRegistry, MultisigStatus,
+use crate::{
+    contexts::multisig::{ApproveProposal, CreateProposal, Initialization, SignProposal},
+    errors::MultisigErrorCode,
+    states::multisig::{Multisig, ProposalStatus, Signers, MAX_SIGNERS, MAX_THRESHOLD},
 };
 use anchor_lang::prelude::*;
-use solana_program::keccak::hash;
 
-pub fn get_members(multisig_registry: &MultisigRegistry) -> Vec<MultisigMember> {
-    multisig_registry.members.clone()
+pub fn initialization(ctx: Context<Initialization>) -> Result<()> {
+    ctx.accounts.proposal_identifier.id = 0;
+
+    let multisig = &mut ctx.accounts.multisig;
+    multisig.name = String::from("System");
+    multisig.threshold = 0;
+    multisig.signers = Vec::new();
+
+    Ok(())
 }
-
-pub fn get_member(
-    multisig_registry: &MultisigRegistry,
-    target_pubkey: &Pubkey,
-) -> Option<MultisigMember> {
-    multisig_registry
-        .members
-        .iter()
-        .find(|member| member.pubkey == *target_pubkey)
-        .cloned()
-}
-
-pub fn get_proposals(multisig_registry: &MultisigRegistry) -> Vec<MultisigProposal> {
-    multisig_registry.proposals.clone()
-}
-
-pub fn get_proposal(
-    multisig_registry: &MultisigRegistry,
-    uuid: &String,
-) -> Option<MultisigProposal> {
-    multisig_registry
-        .proposals
-        .iter()
-        .find(|proposal| proposal.uuid == *uuid)
-        .cloned()
-}
-
-pub fn generate_uuid_string(
-    created_by: &Pubkey,
-    created_at: i64,
-    proposal_type: &MultisigProposalType,
-) -> String {
-    let mut data = Vec::new();
-    data.extend_from_slice(created_by.as_ref());
-    data.extend_from_slice(&created_at.to_le_bytes());
-
-    let enum_value = match proposal_type {
-        MultisigProposalType::RegisterMember => 0,
-        MultisigProposalType::UnregisterMember => 1,
-    };
-    data.push(enum_value);
-
-    let hash_result = hash(&data);
-    let uuid_bytes = &hash_result.0[..16];
-
-    uuid_bytes.iter().map(|b| format!("{:02x}", b)).collect()
-}
-
 pub fn create_proposal(
-    ctx: Context<NewMultisig>,
+    ctx: Context<CreateProposal>,
     name: String,
-    action_type: MultisigProposalType,
-    target_pubkey: Pubkey,
+    threshold: u8,
+    signers: Vec<Signers>,
 ) -> Result<()> {
-    let signer_key = ctx.accounts.signer.key();
-    let multisig_registry = &mut ctx.accounts.multisig_registry;
-
-    if action_type == MultisigProposalType::UnregisterMember {
-        require!(
-            get_member(multisig_registry, &target_pubkey).is_some(),
-            MultisigErrorCode::NotRegistered
-        );
-    }
-
-    let uuid = generate_uuid_string(
-        &signer_key,
-        Clock::get()?.unix_timestamp,
-        &action_type,
+    require!(
+        threshold <= MAX_THRESHOLD,
+        MultisigErrorCode::ThresholdLimitReached
     );
-    let members = get_members(multisig_registry);
-    let cloned_members = members
-        .iter()
-        .map(|member| (*member).clone())
-        .filter(|member| member.pubkey != target_pubkey)
-        .collect();
 
-    let new_proposal = MultisigProposal {
-        uuid,
+    require!(
+        signers.len() <= MAX_SIGNERS,
+        MultisigErrorCode::SignerLimitReached
+    );
+
+    let proposal_identifier = &mut ctx.accounts.proposal_identifier;
+    proposal_identifier.id += 1;
+
+    let current_multisig = &ctx.accounts.current_multisig;
+    let required_signers = current_multisig.signers.iter().map(|d| d.pubkey).collect();
+
+    let proposal = &mut ctx.accounts.proposal;
+    proposal.id = proposal_identifier.id;
+    proposal.data = Multisig {
         name,
-        action_type: action_type,
-        target_pubkey: target_pubkey,
-        required_signers: cloned_members,
-        signatures: vec![],
-        status: MultisigStatus::Pending,
+        threshold,
+        signers,
     };
-
-    multisig_registry.proposals.push(new_proposal);
+    proposal.required_signers = required_signers;
+    proposal.signers = Vec::new();
+    proposal.status = ProposalStatus::Pending;
 
     Ok(())
 }
 
-pub fn sign_proposal(ctx: Context<SetMultisig>, uuid: String) -> Result<()> {
+pub fn sign_proposal(ctx: Context<SignProposal>) -> Result<()> {
     let signer_key = ctx.accounts.signer.key();
-    let multisig_registry = &mut ctx.accounts.multisig_registry;
-
-    let members = get_members(multisig_registry);
-    if members.len() > 0 {
-        let current_member = members.iter().find(|member| member.pubkey == signer_key);
-        require!(current_member.is_some(), MultisigErrorCode::NotAMember);
-    }
-
-    let proposal = match get_proposal(multisig_registry, &uuid) {
-        Some(p) => p,
-        None => return Err(MultisigErrorCode::ProposalNotFound.into()),
-    };
+    let current_proposal = &mut ctx.accounts.current_proposal;
 
     require!(
-        proposal.status == MultisigStatus::Pending,
-        MultisigErrorCode::AlreadyProcessed
+        current_proposal.status == ProposalStatus::Pending,
+        MultisigErrorCode::AlreadyResolved
     );
 
-    let required_signers = &proposal.required_signers;
-    if required_signers.len() > 0 {
-        let current_signer = required_signers
-            .iter()
-            .find(|member| member.pubkey == signer_key);
-
+    if current_proposal.required_signers.len() > 0 {
         require!(
-            current_signer.is_some(),
-            MultisigErrorCode::NotARequiredSigner
+            current_proposal.required_signers.contains(&signer_key),
+            MultisigErrorCode::UnauthorizedSigner
         );
     }
 
-    let signatures = &proposal.signatures;
-    if signatures.len() > 0 {
-        let current_signature = signatures.iter().find(|pubkey| **pubkey == signer_key);
+    if current_proposal.signers.len() > 0 {
         require!(
-            current_signature.is_none(),
-            MultisigErrorCode::AlreadySigned
+            !current_proposal.signers.contains(&signer_key),
+            MultisigErrorCode::DuplicateSignature
         );
     }
 
-    let proposal = multisig_registry
-        .proposals
-        .iter_mut()
-        .find(|proposal| proposal.uuid == uuid);
-
-    if let Some(update_proposal) = proposal {
-        update_proposal.signatures.push(signer_key);
-    }
+    current_proposal.signers.push(signer_key);
 
     Ok(())
 }
 
-pub fn approve_proposal(ctx: Context<SetMultisig>, uuid: String) -> Result<()> {
+pub fn approve_proposal(ctx: Context<ApproveProposal>) -> Result<()> {
     let signer_key = ctx.accounts.signer.key();
-    let multisig_registry = &mut ctx.accounts.multisig_registry;
-
-    let members = get_members(multisig_registry);
-    if members.len() > 0 {
-        let current_member = members.iter().find(|member| member.pubkey == signer_key);
-        require!(current_member.is_some(), MultisigErrorCode::NotAMember);
-    }
-
-    let proposal = match get_proposal(multisig_registry, &uuid) {
-        Some(p) => p,
-        None => return Err(MultisigErrorCode::ProposalNotFound.into()),
-    };
+    let current_proposal = &mut ctx.accounts.current_proposal;
 
     require!(
-        proposal.status == MultisigStatus::Pending,
-        MultisigErrorCode::AlreadyProcessed
+        current_proposal.status == ProposalStatus::Pending,
+        MultisigErrorCode::AlreadyResolved
     );
 
-    let required_signers = &proposal.required_signers;
-    if required_signers.len() > 0 {
-        for signer in required_signers {
-            let signatures = &proposal.signatures;
-
-            if !signatures.contains(&signer.pubkey) {
-                return Err(MultisigErrorCode::IncompleteSignatures.into());
-            }
-        }
+    if current_proposal.signers.len() > 0 {
+        require!(
+            current_proposal.signers.iter().any(|s| *s == signer_key),
+            MultisigErrorCode::UnauthorizedSigner
+        );
     }
 
-    let action_type = proposal.action_type.clone();
-    let name = proposal.name.clone();
-    let target_pubkey = proposal.target_pubkey;
+    let all_signed = current_proposal
+        .required_signers
+        .iter()
+        .all(|req| current_proposal.signers.contains(req));
 
-    let proposal = multisig_registry
-        .proposals
-        .iter_mut()
-        .find(|proposal| proposal.uuid == uuid);
+    require!(all_signed, MultisigErrorCode::InsufficientSignatures);
 
-    if let Some(update_proposal) = proposal {
-        update_proposal.status = MultisigStatus::Approved;
-    }
+    let current_multisig = &mut ctx.accounts.current_multisig;
+    current_multisig.name = current_proposal.data.name.clone();
+    current_multisig.threshold = current_proposal.data.threshold;
+    current_multisig.signers = current_proposal.data.signers.clone();
 
-    match action_type {
-        MultisigProposalType::RegisterMember => {
-            multisig_registry.members.push(MultisigMember {
-                name: name.clone(),
-                pubkey: target_pubkey,
-            });
-        }
-        MultisigProposalType::UnregisterMember => {
-            multisig_registry
-                .members
-                .retain(|member| member.pubkey != target_pubkey);
-        }
-    }
+    current_proposal.status = ProposalStatus::Approved;
 
     Ok(())
 }

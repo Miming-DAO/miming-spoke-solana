@@ -2,29 +2,26 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum MultisigErrorCode {
-    #[msg("This public key is already registered.")]
-    AlreadyRegistered,
+    #[msg("The maximum threshold for this proposal has been reached.")]
+    ThresholdLimitReached,
 
-    #[msg("This public key is not registered.")]
-    NotRegistered,
+    #[msg("The maximum number of allowed signers has been reached.")]
+    SignerLimitReached,
 
-    #[msg("You are not a member of this multisig.")]
-    NotAMember,
+    #[msg("The proposal has already been resolved and cannot be modified.")]
+    AlreadyResolved,
 
-    #[msg("You are not listed as a required signer.")]
-    NotARequiredSigner,
+    #[msg("The provided public key is not authorized as a signer.")]
+    UnauthorizedSigner,
 
-    #[msg("Proposal has already been approved or rejected.")]
-    AlreadyProcessed,
+    #[msg("The provided public key is not recognized as a member.")]
+    UnauthorizedMember,
 
-    #[msg("Proposal not found.")]
-    ProposalNotFound,
+    #[msg("This public key has already submitted a signature.")]
+    DuplicateSignature,
 
-    #[msg("Not all required signatures are present.")]
-    IncompleteSignatures,
-
-    #[msg("This signer has already signed.")]
-    AlreadySigned,
+    #[msg("The required number of signatures has not yet been collected.")]
+    InsufficientSignatures,
 }
 
 #[error_code]

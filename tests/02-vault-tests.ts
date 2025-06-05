@@ -52,11 +52,6 @@ const setupTestVariables = async () => {
 }
 
 describe("02-vault-tests", () => {
-    /* 
-      ******************
-      TELEPORTING TOKENS
-      ******************
-    */
     it("should teleport tokens and update the ledger if the user has sufficient balance for both SOL and MIMING", async () => {
         const variables = await setupTestVariables();
 

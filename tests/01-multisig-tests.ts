@@ -10,1066 +10,938 @@ anchor.setProvider(provider);
 const program = anchor.workspace.mimingSpokeSolana as anchor.Program<MimingSpokeSolana>;
 const connection = program.provider.connection;
 
-const [multisigRegistryPDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from("miming_multisig_registry")],
-    program.programId
-);
+const [proposalIdentifierPda] = PublicKey.findProgramAddressSync([Buffer.from("proposal_identifier")], program.programId);
+const [multisigPda] = PublicKey.findProgramAddressSync([Buffer.from("multisig")], program.programId);
 
-const setupTestKeypairs = async () => {
+describe("01-multisig-tests", () => {
     const signer = Keypair.generate();
     const target = Keypair.generate();
 
-    await connection.requestAirdrop(signer.publicKey, 2e9);
-    await connection.requestAirdrop(target.publicKey, 2e9);
+    let firstSigners: { name: string; pubkey: PublicKey; keypair: Keypair; }[] = [];
+    let secondSigners: { name: string; pubkey: PublicKey; keypair: Keypair; }[] = [];
+    let thirdSigners: { name: string; pubkey: PublicKey; keypair: Keypair; }[] = [];
+    let fourthSigners: { name: string; pubkey: PublicKey; keypair: Keypair; }[] = [];
 
-    await sleep(2000);
+    it("should initialize multisig.", async () => {
+        const signer = Keypair.generate();
 
-    return { signer, target }
-}
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
 
-const createProposal = async (
-    signer: anchor.web3.Keypair,
-    params: {
-        name: string;
-        actionType: { registerMember: {} } | { unregisterMember: {} };
-        targetPublicKey: anchor.web3.PublicKey;
-        expectations: {
-            expectedSigners: {
-                name: string,
-                keypair: anchor.web3.Keypair;
-            }[] | [],
-        }
-    }
-): Promise<string> => {
-    let uuid = "";
+        await sleep(2000);
 
-    try {
-        await program.methods.multisigCreateProposal(params.name, params.actionType, params.targetPublicKey)
+        await program.methods.initialization()
             .accounts({
                 signer: signer.publicKey,
-                multisig_registry: multisigRegistryPDA,
+                proposalIdentifier: proposalIdentifierPda,
+                multisig: multisigPda,
                 systemProgram: SystemProgram.programId
             } as any)
             .signers([signer])
             .rpc();
-    } catch (err: any) {
-        throw err;
-    }
+    });
 
-    const multisigRegistry = await program.account.multisigRegistry.fetch(multisigRegistryPDA)
+    it("creating a proposal should succeed with valid signers and threshold.", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
 
-    const proposals = multisigRegistry.proposals;
-    const proposal = proposals.length > 0 ? proposals[proposals.length - 1] : null;
+        await sleep(2000);
 
-    if (proposal) {
-        uuid = proposal.uuid;
+        const name = "Test";
+        const threshold = 5;
 
-        expect(proposal.name).to.equal(params.name);
-        expect(Object.keys(proposal.actionType)[0]).to.equal(Object.keys(params.actionType)[0]);
-        expect(proposal.targetPubkey.equals(params.targetPublicKey)).to.be.true;
+        const signer1 = Keypair.generate();
+        const signer2 = Keypair.generate();
+        const signer3 = Keypair.generate();
+        const signer4 = Keypair.generate();
+        const signer5 = Keypair.generate();
 
-        if (params.expectations.expectedSigners.length > 0) {
-            expect(proposal.requiredSigners).to.be.an("array").that.is.not.empty;
+        const signers: { name: string; pubkey: PublicKey; }[] = [
+            { name: "signer1", pubkey: signer1.publicKey },
+            { name: "signer2", pubkey: signer2.publicKey },
+            { name: "signer3", pubkey: signer3.publicKey },
+            { name: "signer4", pubkey: signer4.publicKey },
+            { name: "signer5", pubkey: signer5.publicKey },
+        ]
 
-            for (let i = 0; i < params.expectations.expectedSigners.length; i++) {
-                let expectedSigner = params.expectations.expectedSigners[i];
+        const proposalIdentifier = await program.account.identifierAccount.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
 
-                const memberFound = proposal.requiredSigners.find(
-                    signer => signer.name === expectedSigner.name && signer.pubkey.equals(expectedSigner.keypair.publicKey)
-                );
-                expect(memberFound, "Required signer was not found in the proposal").to.not.be.undefined;
-            }
-        } else {
-            expect(proposal.requiredSigners).to.be.an("array").that.is.empty;
-        }
-
-        expect(proposal.signatures).to.be.an("array").that.is.empty;
-        expect(proposal.status).to.have.property("pending");
-    }
-
-    return uuid
-}
-
-const signProposal = async (
-    signer: anchor.web3.Keypair,
-    params: {
-        uuid: string;
-        expectations: {
-            name: string;
-            actionType: string;
-            targetPublicKey: anchor.web3.PublicKey;
-            expectedSigners: {
-                name: string,
-                keypair: anchor.web3.Keypair;
-            }[] | [],
-            expectedSignatures: anchor.web3.PublicKey[] | []
-        }
-    }): Promise<void> => {
-    try {
-        await program.methods.multisigSignProposal(params.uuid)
+        await program.methods.multisigCreateProposal(name, threshold, signers)
             .accounts({
                 signer: signer.publicKey,
-                multisig_registry: multisigRegistryPDA,
+                currentMultisig: multisigPda,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                systemProgram: SystemProgram.programId
             } as any)
             .signers([signer])
             .rpc();
-    } catch (err: any) {
-        throw err;
-    }
 
-    const multisigRegistry = await program.account.multisigRegistry.fetch(multisigRegistryPDA)
+        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(newProposal.data.name).to.equal(name);
+        expect(newProposal.data.threshold).equal(5);
+        expect(newProposal.data.signers).to.deep.equal(signers);
+        expect(newProposal.requiredSigners).to.deep.equal([]);
+        expect(newProposal.signers).to.deep.equal([]);
+        expect(newProposal.status).to.have.property("pending");
 
-    const proposal = multisigRegistry.proposals.find(d => d.uuid === params.uuid);
-    if (proposal) {
-        expect(proposal.uuid).to.equal(params.uuid)
-
-        expect(proposal.name).to.equal(params.expectations.name)
-        expect(proposal.actionType).to.have.property(params.expectations.actionType)
-        expect(proposal.targetPubkey.equals(params.expectations.targetPublicKey)).to.be.true;
-
-        if (params.expectations.expectedSigners.length > 0) {
-            expect(proposal.requiredSigners).to.be.an("array").that.is.not.empty;
-
-            for (let i = 0; i < params.expectations.expectedSigners.length; i++) {
-                let expectedSigner = params.expectations.expectedSigners[i];
-
-                const memberFound = proposal.requiredSigners.find(
-                    signer => signer.name === expectedSigner.name && signer.pubkey.equals(expectedSigner.keypair.publicKey)
-                );
-                expect(memberFound, "Required signer was not found in the proposal").to.not.be.undefined;
-            }
-        } else {
-            expect(proposal.requiredSigners).to.be.an("array").that.is.empty;
-        }
-
-        if (params.expectations.expectedSignatures.length > 0) {
-            expect(proposal.signatures).to.be.an("array").that.is.not.empty;
-            for (let i = 0; i < params.expectations.expectedSignatures.length; i++) {
-                let expectedSignature = params.expectations.expectedSignatures[i];
-
-                const signatureFound = proposal.signatures.find(
-                    signature => signature.equals(expectedSignature)
-                );
-                expect(signatureFound, "Signer was not found in the proposal signatures").to.not.be.undefined;
-            }
-        } else {
-            expect(proposal.signatures).to.be.an("array").that.is.empty;
-        }
-
-        expect(proposal.status).to.have.property("pending");
-    }
-}
-
-const approveProposal = async (signer: anchor.web3.Keypair,
-    params: {
-        uuid: string;
-        expectations: {
-            name: string;
-            actionType: string;
-            targetPublicKey: anchor.web3.PublicKey;
-            expectedSigners: {
-                name: string,
-                keypair: anchor.web3.Keypair;
-            }[] | [],
-            expectedSignatures: anchor.web3.PublicKey[] | []
-        }
-    }): Promise<void> => {
-    try {
-        await program.methods.multisigApproveProposal(params.uuid)
+        await program.methods.multisigSignProposal()
             .accounts({
                 signer: signer.publicKey,
-                multisig_registry: multisigRegistryPDA,
+                currentProposal: proposalPda,
+                systemProgram: SystemProgram.programId
             } as any)
             .signers([signer])
             .rpc();
-    } catch (err: any) {
-        throw err;
-    }
 
-    const multisigRegistry = await program.account.multisigRegistry.fetch(multisigRegistryPDA)
+        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(signedProposal.data.name).to.equal(name);
+        expect(signedProposal.data.threshold).equal(5);
+        expect(signedProposal.data.signers).to.deep.equal(signers);
+        expect(signedProposal.requiredSigners).to.deep.equal([]);
+        expect(signedProposal.signers).to.deep.equal([signer.publicKey]);
+        expect(signedProposal.status).to.have.property("pending");
 
-    const proposal = multisigRegistry.proposals.find(d => d.uuid === params.uuid);
-    if (proposal) {
-        expect(proposal.uuid).to.equal(params.uuid)
+        await program.methods.multisigApproveProposal()
+            .accounts({
+                signer: signer.publicKey,
+                currentProposal: proposalPda,
+                currentMultisig: multisigPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
 
-        expect(proposal.name).to.equal(params.expectations.name)
-        expect(proposal.actionType).to.have.property(params.expectations.actionType)
-        expect(proposal.targetPubkey.equals(params.expectations.targetPublicKey)).to.be.true;
+        const approvedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(approvedProposal.data.name).to.equal(name);
+        expect(approvedProposal.data.threshold).equal(5);
+        expect(approvedProposal.data.signers).to.deep.equal(signers);
+        expect(approvedProposal.requiredSigners).to.deep.equal([]);
+        expect(approvedProposal.signers).to.deep.equal([signer.publicKey]);
+        expect(approvedProposal.status).to.have.property("approved");
 
-        if (params.expectations.expectedSigners.length > 0) {
-            expect(proposal.requiredSigners).to.be.an("array").that.is.not.empty;
+        const multisig = await program.account.multisigAccount.fetch(multisigPda);
+        expect(multisig.name).to.equal(name);
+        expect(multisig.threshold).equal(5);
+        expect(multisig.signers).to.deep.equal(signers);
 
-            for (let i = 0; i < params.expectations.expectedSigners.length; i++) {
-                let expectedSigner = params.expectations.expectedSigners[i];
-
-                const memberFound = proposal.requiredSigners.find(
-                    signer => signer.name === expectedSigner.name && signer.pubkey.equals(expectedSigner.keypair.publicKey)
-                );
-                expect(memberFound, "Required signer was not found in the proposal").to.not.be.undefined;
-            }
-        } else {
-            expect(proposal.requiredSigners).to.be.an("array").that.is.empty;
-        }
-
-        if (params.expectations.expectedSignatures.length > 0) {
-            expect(proposal.signatures).to.be.an("array").that.is.not.empty;
-            for (let i = 0; i < params.expectations.expectedSignatures.length; i++) {
-                let expectedSignature = params.expectations.expectedSignatures[i];
-
-                const signatureFound = proposal.signatures.find(
-                    signature => signature.equals(expectedSignature)
-                );
-                expect(signatureFound, "Signer was not found in the proposal signatures").to.not.be.undefined;
-            }
-        } else {
-            expect(proposal.signatures).to.be.an("array").that.is.empty;
-        }
-
-        expect(proposal.status).to.have.property("approved");
-    }
-
-    const members = multisigRegistry.members;
-
-    if (params.expectations.actionType === "registerMember") {
-        expect(members).to.be.an("array").that.is.not.empty;
-
-        const member = members.find(d => d.pubkey.equals(params.expectations.targetPublicKey));
-        expect(member.name).to.equal(params.expectations.name)
-        expect(member.pubkey.equals(params.expectations.targetPublicKey)).to.be.true;
-    }
-
-    if (params.expectations.actionType === "unregisterMember") {
-        const removedMember = members.filter(d => d.pubkey.equals(params.expectations.targetPublicKey))
-        expect(removedMember.length).to.equal(0)
-    }
-}
-
-describe("01-multisig-tests", () => {
-    let firstMemberSigner: anchor.web3.Keypair;
-    let secondMemberSigner: anchor.web3.Keypair;
-    let thirdMemberSigner: anchor.web3.Keypair;
-    let fourthMemberSigner: anchor.web3.Keypair;
-
-    /* 
-      *****************
-      PROPOSAL CREATION
-      *****************
-    */
-    describe("Proposal Creation", () => {
-        describe("create_proposal (RegisterMember)", () => {
-            it("should create a register proposal when the target is not a member.", async () => {
-                const keypairs = await setupTestKeypairs();
-                const uuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 1",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: []
-                    }
-                })
-            });
-
-            it("should fail if the target is already registered (AlreadyRegistered).", async () => {
-                const keypairs = await setupTestKeypairs();
-                firstMemberSigner = keypairs.target;
-
-                const uuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 2",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: [],
-                    }
-                });
-
-                await signProposal(keypairs.signer, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 2",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [],
-                        expectedSignatures: [keypairs.signer.publicKey]
-                    }
-                });
-
-                await approveProposal(keypairs.signer, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 2",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [],
-                        expectedSignatures: [keypairs.signer.publicKey]
-                    }
-                });
-
-                await createProposal(keypairs.signer, {
-                    name: "Test Proposal 2",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: [],
-                    }
-                }).catch((err: any) => {
-                    expect(err).to.have.property("error");
-                    expect(err.error.errorCode?.code).to.equal("AlreadyRegistered");
-                    expect(err.error.errorMessage).to.equal("This public key is already registered.");
-                });
-            });
-        });
-
-        describe("create_proposal (UnegisterMember)", () => {
-            it("should create an unregister proposal when the target is a member.", async () => {
-                const keypairs = await setupTestKeypairs();
-
-                const firstUuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 3",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                    }
-                });
-
-                await signProposal(firstMemberSigner, {
-                    uuid: firstUuid,
-                    expectations: {
-                        name: "Test Proposal 3",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                        expectedSignatures: [firstMemberSigner.publicKey]
-                    }
-                });
-
-                await approveProposal(firstMemberSigner, {
-                    uuid: firstUuid,
-                    expectations: {
-                        name: "Test Proposal 3",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                        expectedSignatures: [firstMemberSigner.publicKey]
-                    }
-                });
-
-                await createProposal(keypairs.signer, {
-                    name: "Test Proposal 3",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                    }
-                }).catch((err: any) => {
-                    expect(err).to.have.property("error");
-                    expect(err.error.errorCode?.code).to.equal("AlreadyRegistered");
-                    expect(err.error.errorMessage).to.equal("This public key is already registered.");
-                });
-
-                const secondUuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 4 - To remove member: Test Proposal 3",
-                    actionType: { unregisterMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                    }
-                });
-
-                await signProposal(firstMemberSigner, {
-                    uuid: secondUuid,
-                    expectations: {
-                        name: "Test Proposal 4 - To remove member: Test Proposal 3",
-                        actionType: "unregisterMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                        expectedSignatures: [firstMemberSigner.publicKey]
-                    }
-                });
-
-                await approveProposal(firstMemberSigner, {
-                    uuid: secondUuid,
-                    expectations: {
-                        name: "Test Proposal 4 - To remove member: Test Proposal 3",
-                        actionType: "unregisterMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                        expectedSignatures: [firstMemberSigner.publicKey]
-                    }
-                });
-            });
-
-            it("should fail if the target is not registered (NotRegistered).", async () => {
-                const keypairs = await setupTestKeypairs();
-
-                await createProposal(keypairs.signer, {
-                    name: "Test Proposal 5",
-                    actionType: { unregisterMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: [],
-                    }
-                }).catch((err: any) => {
-                    expect(err).to.have.property("error");
-                    expect(err.error.errorCode?.code).to.equal("NotRegistered");
-                    expect(err.error.errorMessage).to.equal("This public key is not registered.");
-                });
-            });
-        });
+        const signerKeypairs = [signer1, signer2, signer3, signer4, signer5];
+        firstSigners = signers.map((signer, index) => ({
+            name: signer.name,
+            pubkey: signer.pubkey,
+            keypair: signerKeypairs[index]
+        }));
     });
 
-    /*
-      **************** 
-      PROPOSAL SIGNING
-      ****************
-    */
-    describe("Proposal Signing", () => {
-        describe("sign_proposal", () => {
-            it("should allow a valid member to sign a pending proposal.", async () => {
-                const keypairs = await setupTestKeypairs();
+    it("creating a proposal should fail if threshold exceeds maximum allowed (ThresholdLimitReached).", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
 
-                const uuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 6",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                    }
-                });
+        await sleep(2000);
 
-                await signProposal(firstMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 6",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                        expectedSignatures: [firstMemberSigner.publicKey]
-                    }
-                });
+        const name = "Test";
+        const threshold = 11;
+
+        const signer1 = Keypair.generate();
+        const signer2 = Keypair.generate();
+        const signer3 = Keypair.generate();
+        const signer4 = Keypair.generate();
+        const signer5 = Keypair.generate();
+
+        const signers: { name: string; pubkey: PublicKey; }[] = [
+            { name: "signer1", pubkey: signer1.publicKey },
+            { name: "signer2", pubkey: signer2.publicKey },
+            { name: "signer3", pubkey: signer3.publicKey },
+            { name: "signer4", pubkey: signer4.publicKey },
+            { name: "signer5", pubkey: signer5.publicKey },
+        ]
+
+        const proposalIdentifier = await program.account.identifierAccount.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        await program.methods.multisigCreateProposal(name, threshold, signers)
+            .accounts({
+                signer: signer.publicKey,
+                currentMultisig: multisigPda,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc()
+            .catch((err: any) => {
+                expect(err).to.have.property("error");
+                expect(err.error.errorCode?.code).to.equal("ThresholdLimitReached");
+                expect(err.error.errorMessage).to.equal("The maximum threshold for this proposal has been reached.");
             });
-
-            it("should fail if the signer is not a member (NotAMember).", async () => {
-                const keypairs = await setupTestKeypairs();
-
-                const uuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 7",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                    }
-                });
-
-                await signProposal(keypairs.signer, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 7",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [],
-                        expectedSignatures: [firstMemberSigner.publicKey]
-                    }
-                }).catch((err: any) => {
-                    expect(err).to.have.property("error");
-                    expect(err.error.errorCode?.code).to.equal("NotAMember");
-                    expect(err.error.errorMessage).to.equal("You are not a member of this multisig.");
-                });
-            });
-
-            it("should fail if proposal is not found (ProposalNotFound).", async () => {
-                const keypairs = await setupTestKeypairs();
-                const uuid = "123xyz";
-
-                await signProposal(firstMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 8",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                        expectedSignatures: [firstMemberSigner.publicKey]
-                    }
-                }).catch((err: any) => {
-                    expect(err).to.have.property("error");
-                    expect(err.error.errorCode?.code).to.equal("ProposalNotFound");
-                    expect(err.error.errorMessage).to.equal("Proposal not found.");
-                });
-            });
-
-            it("should fail if signer already signed (AlreadySigned).", async () => {
-                const keypairs = await setupTestKeypairs();
-
-                const uuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 9",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                    }
-                });
-
-                await signProposal(firstMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 9",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                        expectedSignatures: [firstMemberSigner.publicKey]
-                    }
-                });
-
-                await signProposal(firstMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 9",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                        expectedSignatures: [firstMemberSigner.publicKey]
-                    }
-                }).catch((err: any) => {
-                    expect(err).to.have.property("error");
-                    expect(err.error.errorCode?.code).to.equal("AlreadySigned");
-                    expect(err.error.errorMessage).to.equal("This signer has already signed.");
-                });
-            });
-
-            it("should fail if proposal status is not Pending (AlreadyProcessed).", async () => {
-                const keypairs = await setupTestKeypairs();
-                secondMemberSigner = keypairs.target
-
-                let uuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 10",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                    }
-                });
-
-                await signProposal(firstMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 10",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                        expectedSignatures: [firstMemberSigner.publicKey]
-                    }
-                });
-
-                await approveProposal(firstMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 10",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                        expectedSignatures: [firstMemberSigner.publicKey]
-                    }
-                });
-
-                await signProposal(firstMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 10",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [{
-                            name: "Test Proposal 2",
-                            keypair: firstMemberSigner
-                        }],
-                        expectedSignatures: [firstMemberSigner.publicKey]
-                    }
-                }).catch((err: any) => {
-                    expect(err).to.have.property("error");
-                    expect(err.error.errorCode?.code).to.equal("AlreadyProcessed");
-                    expect(err.error.errorMessage).to.equal("Proposal has already been approved or rejected.");
-                });
-            });
-
-            it("should fail if signer is not a required signer (NotARequiredSigner).", async () => {
-                const keypairs = await setupTestKeypairs();
-                thirdMemberSigner = keypairs.target
-
-                const expectedSigners = [
-                    {
-                        name: "Test Proposal 2",
-                        keypair: firstMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 10",
-                        keypair: secondMemberSigner
-                    },
-                ]
-
-                const firstUuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 11",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: expectedSigners,
-                    }
-                });
-
-                const firstExpectedSignatures: anchor.web3.PublicKey[] = [];
-                for (const expectedSigner of expectedSigners) {
-                    firstExpectedSignatures.push(expectedSigner.keypair.publicKey)
-
-                    await signProposal(expectedSigner.keypair, {
-                        uuid: firstUuid,
-                        expectations: {
-                            name: "Test Proposal 11",
-                            actionType: "registerMember",
-                            targetPublicKey: keypairs.target.publicKey,
-                            expectedSigners: expectedSigners,
-                            expectedSignatures: firstExpectedSignatures
-                        }
-                    });
-                }
-
-                let secondUuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 12",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: expectedSigners,
-                    }
-                });
-
-                const secondExpectedSignatures: anchor.web3.PublicKey[] = [];
-                for (const expectedSigner of expectedSigners) {
-                    secondExpectedSignatures.push(expectedSigner.keypair.publicKey)
-
-                    await signProposal(expectedSigner.keypair, {
-                        uuid: secondUuid,
-                        expectations: {
-                            name: "Test Proposal 12",
-                            actionType: "registerMember",
-                            targetPublicKey: keypairs.target.publicKey,
-                            expectedSigners: expectedSigners,
-                            expectedSignatures: secondExpectedSignatures
-                        }
-                    });
-                }
-
-                await approveProposal(secondMemberSigner, {
-                    uuid: secondUuid,
-                    expectations: {
-                        name: "Test Proposal 12",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: expectedSigners,
-                        expectedSignatures: [
-                            firstMemberSigner.publicKey,
-                            secondMemberSigner.publicKey,
-                        ]
-                    }
-                });
-
-                const expectedSignersWithThirdMember = [
-                    {
-                        name: "Test Proposal 2",
-                        keypair: firstMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 10",
-                        keypair: secondMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 12",
-                        keypair: thirdMemberSigner
-                    },
-                ]
-
-                await signProposal(thirdMemberSigner, {
-                    uuid: firstUuid,
-                    expectations: {
-                        name: "Test Proposal 11",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: expectedSignersWithThirdMember,
-                        expectedSignatures: [
-                            firstMemberSigner.publicKey,
-                            secondMemberSigner.publicKey,
-                            thirdMemberSigner.publicKey,
-                        ]
-                    }
-                }).catch((err: any) => {
-                    expect(err).to.have.property("error");
-                    expect(err.error.errorCode?.code).to.equal("NotARequiredSigner");
-                    expect(err.error.errorMessage).to.equal("You are not listed as a required signer.");
-                });
-            });
-        });
     });
 
-    /*
-      ***************** 
-      PROPOSAL APPROVAL
-      *****************
-    */
-    describe("Proposal Approval", () => {
-        describe("approve_proposal", () => {
-            it("should approve proposal if all required signatures are present.", async () => {
-                const keypairs = await setupTestKeypairs();
-                fourthMemberSigner = keypairs.target
+    it("creating a proposal should fail if signer count exceeds maximum allowed (SignerLimitReached).", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
 
-                const expectedSigners = [
-                    {
-                        name: "Test Proposal 2",
-                        keypair: firstMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 10",
-                        keypair: secondMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 12",
-                        keypair: thirdMemberSigner
-                    },
-                ]
+        await sleep(2000);
 
-                let uuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 13",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: expectedSigners,
-                    }
-                });
-
-                const expectedSignatures: anchor.web3.PublicKey[] = [];
-                for (const expectedSigner of expectedSigners) {
-                    expectedSignatures.push(expectedSigner.keypair.publicKey)
-
-                    await signProposal(expectedSigner.keypair, {
-                        uuid: uuid,
-                        expectations: {
-                            name: "Test Proposal 13",
-                            actionType: "registerMember",
-                            targetPublicKey: keypairs.target.publicKey,
-                            expectedSigners: expectedSigners,
-                            expectedSignatures: expectedSignatures
-                        }
-                    });
-                }
-
-                await approveProposal(secondMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 13",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: expectedSigners,
-                        expectedSignatures: [
-                            firstMemberSigner.publicKey,
-                            secondMemberSigner.publicKey,
-                        ]
-                    }
-                });
-            });
-
-            it("should fail if signer is not a member (NotAMember).", async () => {
-                const keypairs = await setupTestKeypairs();
-
-                const expectedSigners = [
-                    {
-                        name: "Test Proposal 2",
-                        keypair: firstMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 10",
-                        keypair: secondMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 12",
-                        keypair: thirdMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 13",
-                        keypair: fourthMemberSigner
-                    },
-                ]
-
-                let uuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 14",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: expectedSigners,
-                    }
-                });
-
-                const expectedSignatures: anchor.web3.PublicKey[] = [];
-                for (const expectedSigner of expectedSigners) {
-                    expectedSignatures.push(expectedSigner.keypair.publicKey)
-
-                    await signProposal(expectedSigner.keypair, {
-                        uuid: uuid,
-                        expectations: {
-                            name: "Test Proposal 14",
-                            actionType: "registerMember",
-                            targetPublicKey: keypairs.target.publicKey,
-                            expectedSigners: expectedSigners,
-                            expectedSignatures: expectedSignatures
-                        }
-                    });
-                }
-
-                await approveProposal(keypairs.signer, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 14",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: [],
-                        expectedSignatures: []
-                    }
-                }).catch((err: any) => {
-                    expect(err).to.have.property("error");
-                    expect(err.error.errorCode?.code).to.equal("NotAMember");
-                    expect(err.error.errorMessage).to.equal("You are not a member of this multisig.");
-                });
-            });
-
-            it("should fail if proposal not found (ProposalNotFound).", async () => {
-                const keypairs = await setupTestKeypairs();
-                const uuid = "123xyz";
-
-                const expectedSigners = [
-                    {
-                        name: "Test Proposal 2",
-                        keypair: firstMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 10",
-                        keypair: secondMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 12",
-                        keypair: thirdMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 13",
-                        keypair: fourthMemberSigner
-                    },
-                ]
-
-                await approveProposal(secondMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 15",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: expectedSigners,
-                        expectedSignatures: []
-                    }
-                }).catch((err: any) => {
-                    expect(err).to.have.property("error");
-                    expect(err.error.errorCode?.code).to.equal("ProposalNotFound");
-                    expect(err.error.errorMessage).to.equal("Proposal not found.");
-                });
-            });
-
-            it("should fail if proposal already processed (AlreadyProcessed).", async () => {
-                const keypairs = await setupTestKeypairs();
-
-                const expectedSigners = [
-                    {
-                        name: "Test Proposal 2",
-                        keypair: firstMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 10",
-                        keypair: secondMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 12",
-                        keypair: thirdMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 13",
-                        keypair: fourthMemberSigner
-                    },
-                ]
-
-                let uuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 16",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: expectedSigners,
-                    }
-                });
-
-                const expectedSignatures: anchor.web3.PublicKey[] = [];
-                for (const expectedSigner of expectedSigners) {
-                    expectedSignatures.push(expectedSigner.keypair.publicKey)
-
-                    await signProposal(expectedSigner.keypair, {
-                        uuid: uuid,
-                        expectations: {
-                            name: "Test Proposal 16",
-                            actionType: "registerMember",
-                            targetPublicKey: keypairs.target.publicKey,
-                            expectedSigners: expectedSigners,
-                            expectedSignatures: expectedSignatures
-                        }
-                    });
-                }
-
-                await approveProposal(thirdMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 16",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: expectedSigners,
-                        expectedSignatures: [
-                            firstMemberSigner.publicKey,
-                            secondMemberSigner.publicKey,
-                            thirdMemberSigner.publicKey
-                        ]
-                    }
-                });
-
-                await approveProposal(thirdMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 16",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: expectedSigners,
-                        expectedSignatures: [
-                            firstMemberSigner.publicKey,
-                            secondMemberSigner.publicKey,
-                            thirdMemberSigner.publicKey
-                        ]
-                    }
-                }).catch((err: any) => {
-                    expect(err).to.have.property("error");
-                    expect(err.error.errorCode?.code).to.equal("AlreadyProcessed");
-                    expect(err.error.errorMessage).to.equal("Proposal has already been approved or rejected.");
-                });
-            });
-
-            it("should fail if not all required signatures are collected (IncompleteSignatures).", async () => {
-                const keypairs = await setupTestKeypairs();
-
-                const expectedSigners = [
-                    {
-                        name: "Test Proposal 2",
-                        keypair: firstMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 10",
-                        keypair: secondMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 12",
-                        keypair: thirdMemberSigner
-                    },
-                    {
-                        name: "Test Proposal 13",
-                        keypair: fourthMemberSigner
-                    },
-                ]
-
-                let uuid = await createProposal(keypairs.signer, {
-                    name: "Test Proposal 17",
-                    actionType: { registerMember: {} },
-                    targetPublicKey: keypairs.target.publicKey,
-                    expectations: {
-                        expectedSigners: expectedSigners,
-                    }
-                });
-
-                await signProposal(firstMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 17",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: expectedSigners,
-                        expectedSignatures: [
-                            firstMemberSigner.publicKey,
-                        ]
-                    }
-                });
-
-                await approveProposal(thirdMemberSigner, {
-                    uuid: uuid,
-                    expectations: {
-                        name: "Test Proposal 17",
-                        actionType: "registerMember",
-                        targetPublicKey: keypairs.target.publicKey,
-                        expectedSigners: expectedSigners,
-                        expectedSignatures: [
-                            firstMemberSigner.publicKey,
-                            secondMemberSigner.publicKey,
-                            thirdMemberSigner.publicKey
-                        ]
-                    }
-                }).catch((err: any) => {
-                    expect(err).to.have.property("error");
-                    expect(err.error.errorCode?.code).to.equal("IncompleteSignatures");
-                    expect(err.error.errorMessage).to.equal("Not all required signatures are present.");
-                });
-            });
+        const name = "Test";
+        const threshold = 5;
+        const signers: { name: string; pubkey: PublicKey; }[] = Array.from({ length: 11 }, (_, i) => {
+            const signer = Keypair.generate();
+            return {
+                name: `signer${i + 1}`,
+                pubkey: signer.publicKey
+            };
         });
+
+        const proposalIdentifier = await program.account.identifierAccount.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        await program.methods.multisigCreateProposal(name, threshold, signers)
+            .accounts({
+                signer: signer.publicKey,
+                currentMultisig: multisigPda,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc()
+            .catch((err: any) => {
+                expect(err).to.have.property("error");
+                expect(err.error.errorCode?.code).to.equal("SignerLimitReached");
+                expect(err.error.errorMessage).to.equal("The maximum number of allowed signers has been reached.");
+            });
+    });
+
+    it("should sign a proposal if signer is valid and has not signed yet.", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
+
+        await sleep(2000);
+
+        const name = "Test";
+        const threshold = 5;
+        const signers: { name: string; pubkey: PublicKey; }[] = Array.from({ length: 5 }, (_, i) => {
+            const signer = Keypair.generate();
+            return {
+                name: `signer${i + 1}`,
+                pubkey: signer.publicKey
+            };
+        });
+
+        const requiredSigners = firstSigners.map(signer => {
+            return signer.pubkey
+        });
+
+        const proposalIdentifier = await program.account.identifierAccount.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        await program.methods.multisigCreateProposal(name, threshold, signers)
+            .accounts({
+                signer: signer.publicKey,
+                currentMultisig: multisigPda,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
+
+        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(newProposal.data.name).to.equal(name);
+        expect(newProposal.data.threshold).equal(5);
+        expect(newProposal.data.signers).to.deep.equal(signers);
+        expect(newProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(newProposal.signers).to.deep.equal([]);
+        expect(newProposal.status).to.have.property("pending");
+
+        const signersArray: PublicKey[] = [];
+        for (const signer of firstSigners) {
+            await program.methods.multisigSignProposal()
+                .accounts({
+                    signer: signer.pubkey,
+                    currentProposal: proposalPda,
+                    systemProgram: SystemProgram.programId
+                } as any)
+                .signers([signer.keypair])
+                .rpc();
+
+            signersArray.push(signer.pubkey);
+        };
+
+        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(signedProposal.data.name).to.equal(name);
+        expect(signedProposal.data.threshold).equal(5);
+        expect(signedProposal.data.signers).to.deep.equal(signers);
+        expect(signedProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(signedProposal.signers).to.deep.equal(signersArray);
+        expect(signedProposal.status).to.have.property("pending");
+    });
+
+    it("signing a proposal should fail if the proposal is already resolved (AlreadyResolved).", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
+
+        await sleep(2000);
+
+        const name = "Test";
+        const threshold = 5;
+
+        const signer1 = Keypair.generate();
+        const signer2 = Keypair.generate();
+        const signer3 = Keypair.generate();
+        const signer4 = Keypair.generate();
+        const signer5 = Keypair.generate();
+
+        const signers: { name: string; pubkey: PublicKey; }[] = [
+            { name: "signer1", pubkey: signer1.publicKey },
+            { name: "signer2", pubkey: signer2.publicKey },
+            { name: "signer3", pubkey: signer3.publicKey },
+            { name: "signer4", pubkey: signer4.publicKey },
+            { name: "signer5", pubkey: signer5.publicKey },
+        ]
+
+        const requiredSigners = firstSigners.map(signer => {
+            return signer.pubkey
+        });
+
+        const proposalIdentifier = await program.account.identifierAccount.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        await program.methods.multisigCreateProposal(name, threshold, signers)
+            .accounts({
+                signer: signer.publicKey,
+                currentMultisig: multisigPda,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
+
+        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(newProposal.data.name).to.equal(name);
+        expect(newProposal.data.threshold).equal(5);
+        expect(newProposal.data.signers).to.deep.equal(signers);
+        expect(newProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(newProposal.signers).to.deep.equal([]);
+        expect(newProposal.status).to.have.property("pending");
+
+        const signersArray: PublicKey[] = [];
+        for (const signer of firstSigners) {
+            await program.methods.multisigSignProposal()
+                .accounts({
+                    signer: signer.pubkey,
+                    currentProposal: proposalPda,
+                    systemProgram: SystemProgram.programId
+                } as any)
+                .signers([signer.keypair])
+                .rpc();
+
+            signersArray.push(signer.pubkey);
+        };
+
+        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(signedProposal.data.name).to.equal(name);
+        expect(signedProposal.data.threshold).equal(5);
+        expect(signedProposal.data.signers).to.deep.equal(signers);
+        expect(signedProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(signedProposal.signers).to.deep.equal(signersArray);
+        expect(signedProposal.status).to.have.property("pending");
+
+        await program.methods.multisigApproveProposal()
+            .accounts({
+                signer: firstSigners[0].pubkey,
+                currentProposal: proposalPda,
+                currentMultisig: multisigPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([firstSigners[0].keypair])
+            .rpc();
+
+        const approvedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(approvedProposal.data.name).to.equal(name);
+        expect(approvedProposal.data.threshold).equal(5);
+        expect(approvedProposal.data.signers).to.deep.equal(signers);
+        expect(approvedProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(approvedProposal.signers).to.deep.equal(signersArray);
+        expect(approvedProposal.status).to.have.property("approved");
+
+        const multisig = await program.account.multisigAccount.fetch(multisigPda);
+        expect(multisig.name).to.equal(name);
+        expect(multisig.threshold).equal(5);
+        expect(multisig.signers).to.deep.equal(signers);
+
+        const signerKeypairs = [signer1, signer2, signer3, signer4, signer5];
+        secondSigners = signers.map((signer, index) => ({
+            name: signer.name,
+            pubkey: signer.pubkey,
+            keypair: signerKeypairs[index]
+        }));
+
+        await program.methods.multisigApproveProposal()
+            .accounts({
+                signer: firstSigners[0].pubkey,
+                currentProposal: proposalPda,
+                currentMultisig: multisigPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([firstSigners[0].keypair])
+            .rpc()
+            .catch((err: any) => {
+                expect(err).to.have.property("error");
+                expect(err.error.errorCode?.code).to.equal("AlreadyResolved");
+                expect(err.error.errorMessage).to.equal("The proposal has already been resolved and cannot be modified.");
+            });
+    });
+
+    it("signing a proposal should fail if the signer is not among required signers (UnauthorizedSigner).", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
+
+        await sleep(2000);
+
+        const name = "Test";
+        const threshold = 5;
+        const signers: { name: string; pubkey: PublicKey; }[] = Array.from({ length: 5 }, (_, i) => {
+            const signer = Keypair.generate();
+            return {
+                name: `signer${i + 1}`,
+                pubkey: signer.publicKey
+            };
+        });
+
+        const requiredSigners = secondSigners.map(signer => {
+            return signer.pubkey
+        });
+
+        const proposalIdentifier = await program.account.identifierAccount.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        await program.methods.multisigCreateProposal(name, threshold, signers)
+            .accounts({
+                signer: signer.publicKey,
+                currentMultisig: multisigPda,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
+
+        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(newProposal.data.name).to.equal(name);
+        expect(newProposal.data.threshold).equal(5);
+        expect(newProposal.data.signers).to.deep.equal(signers);
+        expect(newProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(newProposal.signers).to.deep.equal([]);
+        expect(newProposal.status).to.have.property("pending");
+
+        await program.methods.multisigSignProposal()
+            .accounts({
+                signer: signer.publicKey,
+                currentProposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc()
+            .catch((err: any) => {
+                expect(err).to.have.property("error");
+                expect(err.error.errorCode?.code).to.equal("UnauthorizedSigner");
+                expect(err.error.errorMessage).to.equal("The provided public key is not authorized as a signer.");
+            });
+    });
+
+    it("signing a proposal should fail if the signer has already signed (DuplicateSignature).", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
+
+        await sleep(2000);
+
+        const name = "Test";
+        const threshold = 5;
+        const signers: { name: string; pubkey: PublicKey; }[] = Array.from({ length: 5 }, (_, i) => {
+            const signer = Keypair.generate();
+            return {
+                name: `signer${i + 1}`,
+                pubkey: signer.publicKey
+            };
+        });
+
+        const requiredSigners = secondSigners.map(signer => {
+            return signer.pubkey
+        });
+
+        const proposalIdentifier = await program.account.identifierAccount.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        await program.methods.multisigCreateProposal(name, threshold, signers)
+            .accounts({
+                signer: signer.publicKey,
+                currentMultisig: multisigPda,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
+
+        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(newProposal.data.name).to.equal(name);
+        expect(newProposal.data.threshold).equal(5);
+        expect(newProposal.data.signers).to.deep.equal(signers);
+        expect(newProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(newProposal.signers).to.deep.equal([]);
+        expect(newProposal.status).to.have.property("pending");
+
+        const signersArray: PublicKey[] = [];
+        for (const signer of secondSigners) {
+            await program.methods.multisigSignProposal()
+                .accounts({
+                    signer: signer.pubkey,
+                    currentProposal: proposalPda,
+                    systemProgram: SystemProgram.programId
+                } as any)
+                .signers([signer.keypair])
+                .rpc();
+
+            signersArray.push(signer.pubkey);
+        };
+
+        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(signedProposal.data.name).to.equal(name);
+        expect(signedProposal.data.threshold).equal(5);
+        expect(signedProposal.data.signers).to.deep.equal(signers);
+        expect(signedProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(signedProposal.signers).to.deep.equal(signersArray);
+        expect(signedProposal.status).to.have.property("pending");
+
+        await program.methods.multisigSignProposal()
+            .accounts({
+                signer: secondSigners[0].pubkey,
+                currentProposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([secondSigners[0].keypair])
+            .rpc()
+            .catch((err: any) => {
+                expect(err).to.have.property("error");
+                expect(err.error.errorCode?.code).to.equal("DuplicateSignature");
+                expect(err.error.errorMessage).to.equal("This public key has already submitted a signature.");
+            });
+    });
+
+    it("should approve a proposal if all required signatures are present.", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
+
+        await sleep(2000);
+
+        const name = "Test";
+        const threshold = 7;
+
+        const signer1 = Keypair.generate();
+        const signer2 = Keypair.generate();
+        const signer3 = Keypair.generate();
+        const signer4 = Keypair.generate();
+        const signer5 = Keypair.generate();
+        const signer6 = Keypair.generate();
+        const signer7 = Keypair.generate();
+
+        const signers: { name: string; pubkey: PublicKey; }[] = [
+            { name: "signer1", pubkey: signer1.publicKey },
+            { name: "signer2", pubkey: signer2.publicKey },
+            { name: "signer3", pubkey: signer3.publicKey },
+            { name: "signer4", pubkey: signer4.publicKey },
+            { name: "signer5", pubkey: signer5.publicKey },
+            { name: "signer6", pubkey: signer6.publicKey },
+            { name: "signer7", pubkey: signer7.publicKey },
+        ]
+
+        const requiredSigners = secondSigners.map(signer => {
+            return signer.pubkey
+        });
+
+        const proposalIdentifier = await program.account.identifierAccount.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        await program.methods.multisigCreateProposal(name, threshold, signers)
+            .accounts({
+                signer: signer.publicKey,
+                currentMultisig: multisigPda,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
+
+        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(newProposal.data.name).to.equal(name);
+        expect(newProposal.data.threshold).equal(7);
+        expect(newProposal.data.signers).to.deep.equal(signers);
+        expect(newProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(newProposal.signers).to.deep.equal([]);
+        expect(newProposal.status).to.have.property("pending");
+
+        const signersArray: PublicKey[] = [];
+        for (const signer of secondSigners) {
+            await program.methods.multisigSignProposal()
+                .accounts({
+                    signer: signer.pubkey,
+                    currentProposal: proposalPda,
+                    systemProgram: SystemProgram.programId
+                } as any)
+                .signers([signer.keypair])
+                .rpc();
+
+            signersArray.push(signer.pubkey);
+        };
+
+        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(signedProposal.data.name).to.equal(name);
+        expect(signedProposal.data.threshold).equal(7);
+        expect(signedProposal.data.signers).to.deep.equal(signers);
+        expect(signedProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(signedProposal.signers).to.deep.equal(signersArray);
+        expect(signedProposal.status).to.have.property("pending");
+
+        await program.methods.multisigApproveProposal()
+            .accounts({
+                signer: secondSigners[0].pubkey,
+                currentProposal: proposalPda,
+                currentMultisig: multisigPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([secondSigners[0].keypair])
+            .rpc();
+
+        const approvedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(approvedProposal.data.name).to.equal(name);
+        expect(approvedProposal.data.threshold).equal(7);
+        expect(approvedProposal.data.signers).to.deep.equal(signers);
+        expect(approvedProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(approvedProposal.signers).to.deep.equal(signersArray);
+        expect(approvedProposal.status).to.have.property("approved");
+
+        const multisig = await program.account.multisigAccount.fetch(multisigPda);
+        expect(multisig.name).to.equal(name);
+        expect(multisig.threshold).equal(7);
+        expect(multisig.signers).to.deep.equal(signers);
+
+        const signerKeypairs = [signer1, signer2, signer3, signer4, signer5, signer6, signer7];
+        thirdSigners = signers.map((signer, index) => ({
+            name: signer.name,
+            pubkey: signer.pubkey,
+            keypair: signerKeypairs[index]
+        }));
+    });
+
+    it("approving a proposal should fail if the proposal is already resolved (AlreadyResolved).", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
+
+        await sleep(2000);
+
+        const name = "Test";
+        const threshold = 4;
+
+        const signer1 = Keypair.generate();
+        const signer2 = Keypair.generate();
+        const signer3 = Keypair.generate();
+        const signer4 = Keypair.generate();
+
+        const signers: { name: string; pubkey: PublicKey; }[] = [
+            { name: "signer1", pubkey: signer1.publicKey },
+            { name: "signer2", pubkey: signer2.publicKey },
+            { name: "signer3", pubkey: signer3.publicKey },
+            { name: "signer4", pubkey: signer4.publicKey },
+        ]
+
+        const requiredSigners = thirdSigners.map(signer => {
+            return signer.pubkey
+        });
+
+        const proposalIdentifier = await program.account.identifierAccount.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        await program.methods.multisigCreateProposal(name, threshold, signers)
+            .accounts({
+                signer: signer.publicKey,
+                currentMultisig: multisigPda,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
+
+        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(newProposal.data.name).to.equal(name);
+        expect(newProposal.data.threshold).equal(4);
+        expect(newProposal.data.signers).to.deep.equal(signers);
+        expect(newProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(newProposal.signers).to.deep.equal([]);
+        expect(newProposal.status).to.have.property("pending");
+
+        const signersArray: PublicKey[] = [];
+        for (const signer of thirdSigners) {
+            await program.methods.multisigSignProposal()
+                .accounts({
+                    signer: signer.pubkey,
+                    currentProposal: proposalPda,
+                    systemProgram: SystemProgram.programId
+                } as any)
+                .signers([signer.keypair])
+                .rpc();
+
+            signersArray.push(signer.pubkey);
+        };
+
+        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(signedProposal.data.name).to.equal(name);
+        expect(signedProposal.data.threshold).equal(4);
+        expect(signedProposal.data.signers).to.deep.equal(signers);
+        expect(signedProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(signedProposal.signers).to.deep.equal(signersArray);
+        expect(signedProposal.status).to.have.property("pending");
+
+        await program.methods.multisigApproveProposal()
+            .accounts({
+                signer: thirdSigners[0].pubkey,
+                currentProposal: proposalPda,
+                currentMultisig: multisigPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([thirdSigners[0].keypair])
+            .rpc();
+
+        const approvedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(approvedProposal.data.name).to.equal(name);
+        expect(approvedProposal.data.threshold).equal(4);
+        expect(approvedProposal.data.signers).to.deep.equal(signers);
+        expect(approvedProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(approvedProposal.signers).to.deep.equal(signersArray);
+        expect(approvedProposal.status).to.have.property("approved");
+
+        const multisig = await program.account.multisigAccount.fetch(multisigPda);
+        expect(multisig.name).to.equal(name);
+        expect(multisig.threshold).equal(4);
+        expect(multisig.signers).to.deep.equal(signers);
+
+        const signerKeypairs = [signer1, signer2, signer3, signer4];
+        fourthSigners = signers.map((signer, index) => ({
+            name: signer.name,
+            pubkey: signer.pubkey,
+            keypair: signerKeypairs[index]
+        }));
+
+        await program.methods.multisigApproveProposal()
+            .accounts({
+                signer: fourthSigners[0].pubkey,
+                currentProposal: proposalPda,
+                currentMultisig: multisigPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([fourthSigners[0].keypair])
+            .rpc()
+            .catch((err: any) => {
+                expect(err).to.have.property("error");
+                expect(err.error.errorCode?.code).to.equal("AlreadyResolved");
+                expect(err.error.errorMessage).to.equal("The proposal has already been resolved and cannot be modified.");
+            });
+    });
+
+    it("approving a proposal should fail if the signer did not sign the proposal (UnauthorizedSigner).", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
+
+        await sleep(2000);
+
+        const name = "Test";
+        const threshold = 4;
+
+        const signer1 = Keypair.generate();
+        const signer2 = Keypair.generate();
+        const signer3 = Keypair.generate();
+        const signer4 = Keypair.generate();
+
+        const signers: { name: string; pubkey: PublicKey; }[] = [
+            { name: "signer1", pubkey: signer1.publicKey },
+            { name: "signer2", pubkey: signer2.publicKey },
+            { name: "signer3", pubkey: signer3.publicKey },
+            { name: "signer4", pubkey: signer4.publicKey },
+        ]
+
+        const requiredSigners = fourthSigners.map(signer => {
+            return signer.pubkey
+        });
+
+        const proposalIdentifier = await program.account.identifierAccount.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        await program.methods.multisigCreateProposal(name, threshold, signers)
+            .accounts({
+                signer: signer.publicKey,
+                currentMultisig: multisigPda,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
+
+        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(newProposal.data.name).to.equal(name);
+        expect(newProposal.data.threshold).equal(4);
+        expect(newProposal.data.signers).to.deep.equal(signers);
+        expect(newProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(newProposal.signers).to.deep.equal([]);
+        expect(newProposal.status).to.have.property("pending");
+
+        const signersArray: PublicKey[] = [];
+        for (const signer of fourthSigners) {
+            await program.methods.multisigSignProposal()
+                .accounts({
+                    signer: signer.pubkey,
+                    currentProposal: proposalPda,
+                    systemProgram: SystemProgram.programId
+                } as any)
+                .signers([signer.keypair])
+                .rpc();
+
+            signersArray.push(signer.pubkey);
+        };
+
+        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(signedProposal.data.name).to.equal(name);
+        expect(signedProposal.data.threshold).equal(4);
+        expect(signedProposal.data.signers).to.deep.equal(signers);
+        expect(signedProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(signedProposal.signers).to.deep.equal(signersArray);
+        expect(signedProposal.status).to.have.property("pending");
+
+        await program.methods.multisigApproveProposal()
+            .accounts({
+                signer: signer.publicKey,
+                currentProposal: proposalPda,
+                currentMultisig: multisigPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc()
+            .catch((err: any) => {
+                expect(err).to.have.property("error");
+                expect(err.error.errorCode?.code).to.equal("UnauthorizedSigner");
+                expect(err.error.errorMessage).to.equal("The provided public key is not authorized as a signer.");
+            });
+    });
+
+    it("approving a proposal should fail if not all required signatures are collected (InsufficientSignatures).", async () => {
+        await connection.requestAirdrop(signer.publicKey, 10e9);
+        await connection.requestAirdrop(target.publicKey, 10e9);
+
+        await sleep(2000);
+
+        const name = "Test";
+        const threshold = 3;
+        const signers: { name: string; pubkey: PublicKey; }[] = Array.from({ length: 3 }, (_, i) => {
+            const signer = Keypair.generate();
+            return {
+                name: `signer${i + 1}`,
+                pubkey: signer.publicKey
+            };
+        });
+
+        const requiredSigners = fourthSigners.map(signer => {
+            return signer.pubkey
+        });
+
+        const proposalIdentifier = await program.account.identifierAccount.fetch(proposalIdentifierPda);
+        const [proposalPda] = PublicKey.findProgramAddressSync([
+            Buffer.from("proposal"),
+            new anchor.BN(proposalIdentifier.id).toArrayLike(Buffer, 'le', 8)
+        ], program.programId);
+
+        await program.methods.multisigCreateProposal(name, threshold, signers)
+            .accounts({
+                signer: signer.publicKey,
+                currentMultisig: multisigPda,
+                proposalIdentifier: proposalIdentifierPda,
+                proposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([signer])
+            .rpc();
+
+        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(newProposal.data.name).to.equal(name);
+        expect(newProposal.data.threshold).equal(3);
+        expect(newProposal.data.signers).to.deep.equal(signers);
+        expect(newProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(newProposal.signers).to.deep.equal([]);
+        expect(newProposal.status).to.have.property("pending");
+
+        await program.methods.multisigSignProposal()
+            .accounts({
+                signer: fourthSigners[0].pubkey,
+                currentProposal: proposalPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([fourthSigners[0].keypair])
+            .rpc();
+
+        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        expect(signedProposal.data.name).to.equal(name);
+        expect(signedProposal.data.threshold).equal(3);
+        expect(signedProposal.data.signers).to.deep.equal(signers);
+        expect(signedProposal.requiredSigners).to.deep.equal(requiredSigners);
+        expect(signedProposal.signers).to.deep.equal([fourthSigners[0].pubkey]);
+        expect(signedProposal.status).to.have.property("pending");
+
+        await program.methods.multisigApproveProposal()
+            .accounts({
+                signer: fourthSigners[0].pubkey,
+                currentProposal: proposalPda,
+                currentMultisig: multisigPda,
+                systemProgram: SystemProgram.programId
+            } as any)
+            .signers([fourthSigners[0].keypair])
+            .rpc()
+            .catch((err: any) => {
+                expect(err).to.have.property("error");
+                expect(err.error.errorCode?.code).to.equal("InsufficientSignatures");
+                expect(err.error.errorMessage).to.equal("The required number of signatures has not yet been collected.");
+            });
     });
 });

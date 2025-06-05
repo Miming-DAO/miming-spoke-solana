@@ -1,5 +1,7 @@
-use crate::contexts::staking::{Freeze, Thaw};
-use crate::errors::StakingErrorCode;
+use crate::{
+    contexts::staking::{Freeze, Thaw},
+    errors::StakingErrorCode,
+};
 use {
     anchor_lang::prelude::*,
     anchor_spl::token::{freeze_account, thaw_account, FreezeAccount, ThawAccount},

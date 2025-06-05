@@ -1,34 +1,37 @@
+use anchor_lang::prelude::*;
+
 pub mod contexts;
 pub mod errors;
 pub mod instructions;
 pub mod states;
 
-use anchor_lang::prelude::*;
-
-use crate::contexts::*;
-use crate::states::MultisigProposalType;
+use crate::{contexts::*, states::Signers};
 
 declare_id!("3e2igyWExmDZmJfRpMRwn5mrM838Fam3AMzPYvttxRT8");
 
 #[program]
 pub mod miming_spoke_solana {
     use super::*;
-    
+
+    pub fn initialization(ctx: Context<Initialization>) -> Result<()> {
+        instructions::multisig::initialization(ctx)
+    }
+
     pub fn multisig_create_proposal(
-        ctx: Context<NewMultisig>,
+        ctx: Context<CreateProposal>,
         name: String,
-        action_type: MultisigProposalType,
-        target_pubkey: Pubkey,
+        threshold: u8,
+        signers: Vec<Signers>,
     ) -> Result<()> {
-        instructions::multisig::create_proposal(ctx, name, action_type, target_pubkey)
+        instructions::multisig::create_proposal(ctx, name, threshold, signers)
     }
 
-    pub fn multisig_sign_proposal(ctx: Context<SetMultisig>, uuid: String) -> Result<()> {
-        instructions::multisig::sign_proposal(ctx, uuid)
+    pub fn multisig_sign_proposal(ctx: Context<SignProposal>) -> Result<()> {
+        instructions::multisig::sign_proposal(ctx)
     }
 
-    pub fn multisig_approve_proposal(ctx: Context<SetMultisig>, uuid: String) -> Result<()> {
-        instructions::multisig::approve_proposal(ctx, uuid)
+    pub fn multisig_approve_proposal(ctx: Context<ApproveProposal>) -> Result<()> {
+        instructions::multisig::approve_proposal(ctx)
     }
 
     pub fn vault_teleport(ctx: Context<Teleport>, amount: u64) -> Result<()> {
@@ -43,6 +46,3 @@ pub mod miming_spoke_solana {
         instructions::staking::thaw(ctx)
     }
 }
-
-#[derive(Accounts)]
-pub struct Initialize {}
