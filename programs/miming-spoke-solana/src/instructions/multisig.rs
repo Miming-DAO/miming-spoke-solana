@@ -15,6 +15,7 @@ pub fn initialization(ctx: Context<Initialization>) -> Result<()> {
 
     Ok(())
 }
+
 pub fn create_proposal(
     ctx: Context<CreateProposal>,
     name: String,
