@@ -43,12 +43,12 @@
 //! This program is open source and available under the terms of the MIT license.
 use anchor_lang::prelude::*;
 
-pub mod constants;
+pub mod states;
 pub mod multisig;
 pub mod staking;
 pub mod vault;
 
-use constants::*;
+use states::*;
 use multisig::*;
 use staking::*;
 use vault::*;

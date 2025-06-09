@@ -45,6 +45,15 @@
 //!
 //! This module can be integrated into larger DeFi or staking protocols on Solana to provide basic staking functionality
 //! with SPL tokens, leveraging Anchor's security and account management features.
+use crate::{
+    states::{
+        constants::{
+            DISCRIMINATOR, 
+            STRING_LEN, U64_SIZE, 
+        },
+        errors::StakingErrorCode,
+    }
+};
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
@@ -65,8 +74,9 @@ impl Default for StakingConfigAccount {
 }
 
 impl StakingConfigAccount {
-    pub const SIZE_U64: usize = 8;
-    pub const LEN: usize = 8 + Self::SIZE_U64; // min_staking_amount
+    pub const LEN: usize = DISCRIMINATOR + 
+        // min_staking_amount
+        U64_SIZE;
 }
 
 #[account]
@@ -75,8 +85,9 @@ pub struct StakingRegistryAccount {
 }
 
 impl StakingRegistryAccount {
-    pub const SIZE_STRING: usize = 8 + 64;
-    pub const LEN: usize = 8 + Self::SIZE_STRING; // reference_id
+    pub const LEN: usize = DISCRIMINATOR + 
+        // reference_id
+        STRING_LEN; 
 }
 
 #[derive(Accounts)]
@@ -161,12 +172,6 @@ pub struct StakingThaw<'info> {
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
-}
-
-#[error_code]
-pub enum StakingErrorCode {
-    #[msg("Insufficient token balance to stake.")]
-    InsufficientStakingBalance,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]

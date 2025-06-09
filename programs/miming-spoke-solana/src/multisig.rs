@@ -55,11 +55,14 @@
 //! multisignature governance or access control for program operations.
 use anchor_lang::prelude::*;
 use crate::{
-    constants::{
-        DISCRIMINATOR, 
-        STRING_LEN, U8_SIZE, U64_SIZE, 
-        ENUM_SIZE, VEC_SIZE, 
-        PUBKEY_SIZE,
+    states::{
+        constants::{
+            DISCRIMINATOR, 
+            STRING_LEN, U8_SIZE, U64_SIZE, 
+            ENUM_SIZE, VEC_SIZE, 
+            PUBKEY_SIZE,
+        },
+        errors::MultisigErrorCode,
     },
     IdentifierAccount
 };
@@ -211,30 +214,6 @@ pub struct MultisigApproveProposal<'info> {
     pub current_multisig: Account<'info, MultisigAccount>,
 
     pub system_program: Program<'info, System>,
-}
-
-#[error_code]
-pub enum MultisigErrorCode {
-    #[msg("The maximum threshold for this proposal has been reached.")]
-    ThresholdLimitReached,
-
-    #[msg("The maximum number of allowed signers has been reached.")]
-    SignerLimitReached,
-
-    #[msg("The proposal has already been resolved and cannot be modified.")]
-    AlreadyResolved,
-
-    #[msg("The provided public key is not authorized as a signer.")]
-    UnauthorizedSigner,
-
-    #[msg("The provided public key is not recognized as a member.")]
-    UnauthorizedMember,
-
-    #[msg("This public key has already submitted a signature.")]
-    DuplicateSignature,
-
-    #[msg("The required number of signatures has not yet been collected.")]
-    InsufficientSignatures,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
