@@ -1,9 +1,52 @@
+//! # Miming Spoke Solana Program
+//!
+//! This crate implements the on-chain logic for the Miming Spoke Solana program, providing
+//! modular support for multisig, staking, and vault functionalities. It is designed to be
+//! used with the Anchor framework for Solana smart contract development.
+//!
+//! ## Modules
+//!
+//! - [`constants`] - Common constants used throughout the program.
+//! - [`multisig`] - Multisignature account management, proposal creation, signing, and approval.
+//! - [`staking`] - Staking account management, including freezing and thawing operations.
+//! - [`vault`] - Vault operations, including secure token teleportation.
+//!
+//! ## Program Instructions
+//!
+//! The main entrypoint exposes the following instructions:
+//!
+//! - `multisig_initialize`: Initializes a new multisig account.
+//! - `multisig_create_proposal`: Creates a new proposal for a multisig account.
+//! - `multisig_sign_proposal`: Signs a proposal for a multisig account.
+//! - `multisig_approve_proposal`: Approves a proposal for a multisig account.
+//! - `vault_teleport`: Teleports tokens from a vault.
+//! - `staking_freeze`: Freezes a staking account with a reference number.
+//! - `staking_thaw`: Thaws a previously frozen staking account.
+//!
+//! ## Accounts
+//!
+//! - [`IdentifierAccount`]: Stores a unique identifier for account management.
+//!
+//! ## Usage
+//!
+//! This program is intended to be deployed on the Solana blockchain and interacted with
+//! via client-side applications or other on-chain programs. Each module encapsulates
+//! its own instruction handlers and account validation logic.
+//!
+//! ## Security
+//!
+//! The multisig and vault modules are designed to provide robust access control and
+//! secure token management, leveraging Solana's account model and Anchor's safety features.
+//!
+//! ## License
+//!
+//! This program is open source and available under the terms of the MIT license.
+use anchor_lang::prelude::*;
+
 pub mod constants;
 pub mod multisig;
 pub mod staking;
 pub mod vault;
-
-use anchor_lang::prelude::*;
 
 use constants::*;
 use multisig::*;
@@ -13,44 +56,121 @@ use vault::*;
 declare_id!("3e2igyWExmDZmJfRpMRwn5mrM838Fam3AMzPYvttxRT8");
 
 #[program]
+/// This module contains the implementation of the Miming Spoke Solana program.
+///
+/// It defines the functions for interacting with the multisig, vault, and staking functionalities.
 pub mod miming_spoke_solana {
     use super::*;
 
+    /// Initializes a new multisig account.
+    ///
+    /// This function calls the `initialize` function from the `multisig` module to perform the initialization.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context for the `MultisigInitialization` instruction.
     pub fn multisig_initialize(ctx: Context<MultisigInitialization>) -> Result<()> {
-        multisig::initialize(ctx)
+        multisig::MultisigInstructions::initialize(ctx)
     }
 
+    /// Creates a new proposal for a multisig account.
+    ///
+    /// This function calls the `create_proposal` function from the `multisig` module to create the proposal.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context for the `MultisigCreateProposal` instruction.
+    /// * `name` - The name of the proposal.
+    /// * `threshold` - The number of approvals required for the proposal to be executed.
+    /// * `signers` - The list of signers for the proposal.
     pub fn multisig_create_proposal(
         ctx: Context<MultisigCreateProposal>,
         name: String,
         threshold: u8,
-        signers: Vec<Signers>,
+        signers: Vec<MultisigSigners>,
     ) -> Result<()> {
-        multisig::create_proposal(ctx, name, threshold, signers)
+        multisig::MultisigInstructions::create_proposal(ctx, name, threshold, signers)
     }
 
+    /// Signs a proposal for a multisig account.
+    ///
+    /// This function calls the `sign_proposal` function from the `multisig` module to sign the proposal.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context for the `MultisigSignProposal` instruction.
     pub fn multisig_sign_proposal(ctx: Context<MultisigSignProposal>) -> Result<()> {
-        multisig::sign_proposal(ctx)
+        multisig::MultisigInstructions::sign_proposal(ctx)
     }
 
+    /// Approves a proposal for a multisig account.
+    ///
+    /// This function calls the `approve_proposal` function from the `multisig` module to approve the proposal.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context for the `MultisigApproveProposal` instruction.
     pub fn multisig_approve_proposal(ctx: Context<MultisigApproveProposal>) -> Result<()> {
-        multisig::approve_proposal(ctx)
+        multisig::MultisigInstructions::approve_proposal(ctx)
     }
 
-    pub fn staking_freeze(ctx: Context<Freeze>, reference_number: String) -> Result<()> {
-        staking::freeze(ctx, reference_number)
+    /// Teleports tokens from a vault.
+    ///
+    /// This function calls the `teleport` function from the `vault` module to perform the teleportation.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context for the `VaultTeleport` instruction.
+    /// * `amount` - The amount of tokens to teleport.
+    pub fn vault_teleport(ctx: Context<VaultTeleport>, amount: u64) -> Result<()> {
+        vault::VaultInstructions::teleport(ctx, amount)
     }
 
-    pub fn staking_thaw(ctx: Context<Thaw>) -> Result<()> {
-        staking::thaw(ctx)
+    /// Freezes a staking account.
+    ///
+    /// This function calls the `freeze` function from the `staking` module to freeze the account.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context for the `StakingFreeze` instruction.
+    /// * `reference_number` - The reference number for the freeze operation.
+    pub fn staking_freeze(ctx: Context<StakingFreeze>, reference_number: String) -> Result<()> {
+        staking::StakingInstructions::freeze(ctx, reference_number)
     }
 
-    pub fn vault_teleport(ctx: Context<Teleport>, amount: u64) -> Result<()> {
-        vault::teleport(ctx, amount)
+    /// Thaws a staking account.
+    ///
+    /// This function calls the `thaw` function from the `staking` module to thaw the account.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context for the `StakingThaw` instruction.
+    pub fn staking_thaw(ctx: Context<StakingThaw>) -> Result<()> {
+        staking::StakingInstructions::thaw(ctx)
     }
 }
 
 #[account]
+/// Stores a unique identifier for account management.
+///
+/// The `IdentifierAccount` struct is an on-chain account that holds a single `u64` identifier.
+/// This account can be used to track or reference unique entities within the program, such as
+/// for indexing, mapping, or associating data with a specific ID.
+///
+/// ## Fields
+///
+/// - `id` - A 64-bit unsigned integer representing the unique identifier.
+///
+/// ## Size
+///
+/// The total size of the account is defined by `IdentifierAccount::LEN`, which includes
+/// the Anchor account discriminator and the size of the `u64` field.
+///
+/// ## Example
+///
+/// ```rust
+/// let identifier_account = IdentifierAccount { id: 42 };
+/// ```
 pub struct IdentifierAccount {
     pub id: u64,
 }
