@@ -30,7 +30,7 @@ describe("01-multisig-tests", () => {
 
         await sleep(2000);
 
-        await program.methods.initialization()
+        await program.methods.multisigInitialize()
             .accounts({
                 signer: signer.publicKey,
                 proposalIdentifier: proposalIdentifierPda,
@@ -81,7 +81,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(5);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -98,7 +98,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(5);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -116,7 +116,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const approvedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const approvedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(approvedProposal.data.name).to.equal(name);
         expect(approvedProposal.data.threshold).equal(5);
         expect(approvedProposal.data.signers).to.deep.equal(signers);
@@ -179,7 +179,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("ThresholdLimitReached");
-                expect(err.error.errorMessage).to.equal("The maximum threshold for this proposal has been reached.");
+                expect(err.error.errorMessage).to.equal("The proposal has already reached the required number of approvals.");
             });
     });
 
@@ -218,7 +218,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("SignerLimitReached");
-                expect(err.error.errorMessage).to.equal("The maximum number of allowed signers has been reached.");
+                expect(err.error.errorMessage).to.equal("The number of signers has reached the allowed maximum.");
             });
     });
 
@@ -259,7 +259,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(5);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -281,7 +281,7 @@ describe("01-multisig-tests", () => {
             signersArray.push(signer.pubkey);
         };
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(5);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -334,7 +334,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(5);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -356,7 +356,7 @@ describe("01-multisig-tests", () => {
             signersArray.push(signer.pubkey);
         };
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(5);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -374,7 +374,7 @@ describe("01-multisig-tests", () => {
             .signers([firstSigners[0].keypair])
             .rpc();
 
-        const approvedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const approvedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(approvedProposal.data.name).to.equal(name);
         expect(approvedProposal.data.threshold).equal(5);
         expect(approvedProposal.data.signers).to.deep.equal(signers);
@@ -406,7 +406,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("AlreadyResolved");
-                expect(err.error.errorMessage).to.equal("The proposal has already been resolved and cannot be modified.");
+                expect(err.error.errorMessage).to.equal("This proposal has been finalized and cannot be changed.");
             });
     });
 
@@ -447,7 +447,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(5);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -466,7 +466,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("UnauthorizedSigner");
-                expect(err.error.errorMessage).to.equal("The provided public key is not authorized as a signer.");
+                expect(err.error.errorMessage).to.equal("The public key is not authorized to sign this proposal.");
             });
     });
 
@@ -507,7 +507,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(5);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -529,7 +529,7 @@ describe("01-multisig-tests", () => {
             signersArray.push(signer.pubkey);
         };
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(5);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -548,7 +548,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("DuplicateSignature");
-                expect(err.error.errorMessage).to.equal("This public key has already submitted a signature.");
+                expect(err.error.errorMessage).to.equal("This public key has already provided a signature.");
             });
     });
 
@@ -600,7 +600,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(7);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -622,7 +622,7 @@ describe("01-multisig-tests", () => {
             signersArray.push(signer.pubkey);
         };
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(7);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -640,7 +640,7 @@ describe("01-multisig-tests", () => {
             .signers([secondSigners[0].keypair])
             .rpc();
 
-        const approvedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const approvedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(approvedProposal.data.name).to.equal(name);
         expect(approvedProposal.data.threshold).equal(7);
         expect(approvedProposal.data.signers).to.deep.equal(signers);
@@ -703,7 +703,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(4);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -725,7 +725,7 @@ describe("01-multisig-tests", () => {
             signersArray.push(signer.pubkey);
         };
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(4);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -743,7 +743,7 @@ describe("01-multisig-tests", () => {
             .signers([thirdSigners[0].keypair])
             .rpc();
 
-        const approvedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const approvedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(approvedProposal.data.name).to.equal(name);
         expect(approvedProposal.data.threshold).equal(4);
         expect(approvedProposal.data.signers).to.deep.equal(signers);
@@ -775,7 +775,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("AlreadyResolved");
-                expect(err.error.errorMessage).to.equal("The proposal has already been resolved and cannot be modified.");
+                expect(err.error.errorMessage).to.equal("This proposal has been finalized and cannot be changed.");
             });
     });
 
@@ -821,7 +821,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(4);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -843,7 +843,7 @@ describe("01-multisig-tests", () => {
             signersArray.push(signer.pubkey);
         };
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(4);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -863,7 +863,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("UnauthorizedSigner");
-                expect(err.error.errorMessage).to.equal("The provided public key is not authorized as a signer.");
+                expect(err.error.errorMessage).to.equal("The public key is not authorized to sign this proposal.");
             });
     });
 
@@ -904,7 +904,7 @@ describe("01-multisig-tests", () => {
             .signers([signer])
             .rpc();
 
-        const newProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const newProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(newProposal.data.name).to.equal(name);
         expect(newProposal.data.threshold).equal(3);
         expect(newProposal.data.signers).to.deep.equal(signers);
@@ -921,7 +921,7 @@ describe("01-multisig-tests", () => {
             .signers([fourthSigners[0].keypair])
             .rpc();
 
-        const signedProposal = await program.account.proposalAccount.fetch(proposalPda);
+        const signedProposal = await program.account.multisigProposalAccount.fetch(proposalPda);
         expect(signedProposal.data.name).to.equal(name);
         expect(signedProposal.data.threshold).equal(3);
         expect(signedProposal.data.signers).to.deep.equal(signers);
@@ -941,7 +941,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("InsufficientSignatures");
-                expect(err.error.errorMessage).to.equal("The required number of signatures has not yet been collected.");
+                expect(err.error.errorMessage).to.equal("Not enough signatures have been collected to proceed.");
             });
     });
 });
