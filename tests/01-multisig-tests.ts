@@ -179,7 +179,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("ThresholdLimitReached");
-                expect(err.error.errorMessage).to.equal("The maximum threshold for this proposal has been reached.");
+                expect(err.error.errorMessage).to.equal("The proposal has already reached the required number of approvals.");
             });
     });
 
@@ -218,7 +218,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("SignerLimitReached");
-                expect(err.error.errorMessage).to.equal("The maximum number of allowed signers has been reached.");
+                expect(err.error.errorMessage).to.equal("The number of signers has reached the allowed maximum.");
             });
     });
 
@@ -406,7 +406,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("AlreadyResolved");
-                expect(err.error.errorMessage).to.equal("The proposal has already been resolved and cannot be modified.");
+                expect(err.error.errorMessage).to.equal("This proposal has been finalized and cannot be changed.");
             });
     });
 
@@ -466,7 +466,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("UnauthorizedSigner");
-                expect(err.error.errorMessage).to.equal("The provided public key is not authorized as a signer.");
+                expect(err.error.errorMessage).to.equal("The public key is not authorized to sign this proposal.");
             });
     });
 
@@ -548,7 +548,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("DuplicateSignature");
-                expect(err.error.errorMessage).to.equal("This public key has already submitted a signature.");
+                expect(err.error.errorMessage).to.equal("This public key has already provided a signature.");
             });
     });
 
@@ -775,7 +775,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("AlreadyResolved");
-                expect(err.error.errorMessage).to.equal("The proposal has already been resolved and cannot be modified.");
+                expect(err.error.errorMessage).to.equal("This proposal has been finalized and cannot be changed.");
             });
     });
 
@@ -863,7 +863,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("UnauthorizedSigner");
-                expect(err.error.errorMessage).to.equal("The provided public key is not authorized as a signer.");
+                expect(err.error.errorMessage).to.equal("The public key is not authorized to sign this proposal.");
             });
     });
 
@@ -941,7 +941,7 @@ describe("01-multisig-tests", () => {
             .catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("InsufficientSignatures");
-                expect(err.error.errorMessage).to.equal("The required number of signatures has not yet been collected.");
+                expect(err.error.errorMessage).to.equal("Not enough signatures have been collected to proceed.");
             });
     });
 });

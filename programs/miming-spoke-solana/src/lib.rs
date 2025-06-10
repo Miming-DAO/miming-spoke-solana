@@ -1,56 +1,69 @@
 //! # Miming Spoke Solana Program
 //!
-//! This crate implements the on-chain logic for the Miming Spoke Solana program, providing
-//! modular support for multisig, staking, and vault functionalities. It is designed to be
-//! used with the Anchor framework for Solana smart contract development.
+//! This Solana program implements a modular system for multisig account management, vault operations, and staking functionalities using the Anchor framework.
 //!
 //! ## Modules
 //!
-//! - [`constants`] - Common constants used throughout the program.
-//! - [`multisig`] - Multisignature account management, proposal creation, signing, and approval.
-//! - [`staking`] - Staking account management, including freezing and thawing operations.
-//! - [`vault`] - Vault operations, including secure token teleportation.
+//! - **multisig**: Provides multisignature account creation, proposal management, and approval workflows.
+//! - **vault**: Enables secure token storage, teleportation, and multisig-governed transfer proposals from vaults.
+//! - **staking**: Supports staking account freezing and thawing operations.
+//! - **states**: Contains shared state definitions and account structures.
 //!
-//! ## Program Instructions
+//! ## Program Features
 //!
-//! The main entrypoint exposes the following instructions:
+//! - **Multisig Account Management**
+//!   - Initialize multisig accounts with customizable signers and thresholds.
+//!   - Create, sign, and approve proposals for multisig actions.
 //!
-//! - `multisig_initialize`: Initializes a new multisig account.
-//! - `multisig_create_proposal`: Creates a new proposal for a multisig account.
-//! - `multisig_sign_proposal`: Signs a proposal for a multisig account.
-//! - `multisig_approve_proposal`: Approves a proposal for a multisig account.
-//! - `vault_teleport`: Teleports tokens from a vault.
-//! - `staking_freeze`: Freezes a staking account with a reference number.
-//! - `staking_thaw`: Thaws a previously frozen staking account.
+//! - **Vault Operations**
+//!   - Teleport tokens from vaults.
+//!   - Create, sign, and execute transfer proposals from vaults, governed by multisig approval.
 //!
-//! ## Accounts
+//! - **Staking Controls**
+//!   - Freeze and thaw staking accounts for advanced staking management.
 //!
-//! - [`IdentifierAccount`]: Stores a unique identifier for account management.
+//! - **Identifier Account**
+//!   - Provides a simple on-chain account for unique identifier management, useful for indexing or referencing entities.
 //!
 //! ## Usage
 //!
-//! This program is intended to be deployed on the Solana blockchain and interacted with
-//! via client-side applications or other on-chain programs. Each module encapsulates
-//! its own instruction handlers and account validation logic.
+//! Integrate this program into your Solana project to leverage secure multisig workflows, vault-based token management, and advanced staking controls.
 //!
-//! ## Security
-//!
-//! The multisig and vault modules are designed to provide robust access control and
-//! secure token management, leveraging Solana's account model and Anchor's safety features.
+//! ---
 //!
 //! ## License
 //!
-//! This program is open source and available under the terms of the MIT license.
+//! MIT License
+//!
+//! Copyright (c) 2024
+//!
+//! Permission is hereby granted, free of charge, to any person obtaining a copy
+//! of this software and associated documentation files (the "Software"), to deal
+//! in the Software without restriction, including without limitation the rights
+//! to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+//! copies of the Software, and to permit persons to whom the Software is
+//! furnished to do so, subject to the following conditions:
+//!
+//! The above copyright notice and this permission notice shall be included in all
+//! copies or substantial portions of the Software.
+//!
+//! THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//! IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//! FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//! AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+//! SOFTWARE.
 use anchor_lang::prelude::*;
 
-pub mod states;
 pub mod multisig;
 pub mod staking;
+pub mod states;
 pub mod vault;
 
-use states::*;
 use multisig::*;
 use staking::*;
+use states::*;
 use vault::*;
 
 declare_id!("3e2igyWExmDZmJfRpMRwn5mrM838Fam3AMzPYvttxRT8");
@@ -75,7 +88,8 @@ pub mod miming_spoke_solana {
 
     /// Creates a new proposal for a multisig account.
     ///
-    /// This function calls the `create_proposal` function from the `multisig` module to create the proposal.
+    /// This function calls the `create_proposal` function from the `multisig::MultisigInstructions` module 
+    /// to create the proposal.
     ///
     /// # Arguments
     ///
@@ -94,7 +108,8 @@ pub mod miming_spoke_solana {
 
     /// Signs a proposal for a multisig account.
     ///
-    /// This function calls the `sign_proposal` function from the `multisig` module to sign the proposal.
+    /// This function calls the `sign_proposal` function from the `multisig::MultisigInstructions` module 
+    /// to sign the proposal.
     ///
     /// # Arguments
     ///
@@ -105,7 +120,8 @@ pub mod miming_spoke_solana {
 
     /// Approves a proposal for a multisig account.
     ///
-    /// This function calls the `approve_proposal` function from the `multisig` module to approve the proposal.
+    /// This function calls the `approve_proposal` function from the `multisig::MultisigInstructions` module 
+    /// to approve the proposal.
     ///
     /// # Arguments
     ///
@@ -116,7 +132,8 @@ pub mod miming_spoke_solana {
 
     /// Teleports tokens from a vault.
     ///
-    /// This function calls the `teleport` function from the `vault` module to perform the teleportation.
+    /// This function calls the `teleport` function from the `vault::VaultTeleportInstructions` module 
+    /// to perform the teleportation.
     ///
     /// # Arguments
     ///
@@ -126,9 +143,54 @@ pub mod miming_spoke_solana {
         vault::VaultTeleportInstructions::teleport(ctx, amount)
     }
 
+    /// Creates a new transfer proposal from a vault.
+    ///
+    /// This function calls the `create_transfer_proposal` function from the `vault::VaultTransferProposalInstructions` module 
+    /// to create a proposal for transferring tokens from the vault to a specified recipient.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context for the `VaultCreateTransferProposal` instruction.
+    /// * `recipient` - The public key of the recipient who will receive the tokens.
+    /// * `amount` - The amount of tokens to be transferred in the proposal.
+    pub fn vault_create_transfer_proposal(
+        ctx: Context<VaultCreateTransferProposal>,
+        recipient: Pubkey,
+        amount: u64,
+    ) -> Result<()> {
+        vault::VaultTransferProposalInstructions::create_transfer_proposal(ctx, recipient, amount)
+    }
+
+    /// Signs a transfer proposal from a vault.
+    ///
+    /// This function calls the `sign_transfer_proposal` function from the `vault::VaultTransferProposalInstructions` module 
+    /// to sign a transfer proposal for transferring tokens from the vault.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context for the `VaultSignTransferProposal` instruction.
+    pub fn vault_sign_transfer_proposal(ctx: Context<VaultSignTransferProposal>) -> Result<()> {
+        vault::VaultTransferProposalInstructions::sign_transfer_proposal(ctx)
+    }
+
+    // Executes a transfer proposal from a vault.
+    ///
+    /// This function calls the `execute_transfer_proposal` function from the `vault::VaultTransferProposalInstructions` module
+    /// to execute a transfer proposal, transferring tokens from the vault to the specified recipient if the proposal has met the required approvals.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context for the `VaultExecuteTransferProposal` instruction.
+    pub fn vault_execute_transfer_proposal(
+        ctx: Context<VaultExecuteTransferProposal>,
+    ) -> Result<()> {
+        vault::VaultTransferProposalInstructions::execute_transfer_proposal(ctx)
+    }
+
     /// Freezes a staking account.
     ///
-    /// This function calls the `freeze` function from the `staking` module to freeze the account.
+    /// This function calls the `freeze` function from the `staking::StakingInstructions` module 
+    /// to freeze the account.
     ///
     /// # Arguments
     ///
@@ -140,7 +202,8 @@ pub mod miming_spoke_solana {
 
     /// Thaws a staking account.
     ///
-    /// This function calls the `thaw` function from the `staking` module to thaw the account.
+    /// This function calls the `thaw` function from the `staking::StakingInstructions` module 
+    /// to thaw the account.
     ///
     /// # Arguments
     ///
