@@ -37,4 +37,16 @@ pub enum VaultErrorCode {
 
     #[msg("Insufficient MIMING token balance.")]
     InsufficientMimingBalance,
+
+    #[msg("This transaction proposal has already been resolved and cannot be modified.")]
+    AlreadyResolved,
+
+    #[msg("The provided public key is not authorized as a signer.")]
+    UnauthorizedSigner,
+
+    #[msg("This public key has already submitted a signature.")]
+    DuplicateSignature,
+
+    #[msg("The required number of signatures has not yet been collected.")]
+    InsufficientSignatures,
 }

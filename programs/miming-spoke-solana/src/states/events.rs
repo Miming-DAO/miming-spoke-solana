@@ -1,16 +1,9 @@
 use anchor_lang::prelude::*;
 
-#[event]
-pub struct VaultTeleportSuccessful {
-    pub id: u64,
-    pub user: Pubkey,
-    pub sol_amount: u64,
-    pub miming_fee: u64,
-}
+use crate::vault::VaultLedger;
 
 #[event]
-pub struct VaultTransferSuccessful {
+pub struct VaultLedgerEvent {
     pub id: u64,
-    pub user: Pubkey,
-    pub sol_amount: u64,
+    pub data: VaultLedger,
 }

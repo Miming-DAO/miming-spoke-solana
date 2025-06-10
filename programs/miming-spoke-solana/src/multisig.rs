@@ -216,8 +216,7 @@ pub struct MultisigApproveProposal<'info> {
     pub system_program: Program<'info, System>,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-pub struct MultisigInstructions { }
+pub struct MultisigInstructions;
 
 impl MultisigInstructions {
     /// Implements the instructions for managing a multisig account.

@@ -1,60 +1,3 @@
-//! # Vault Module
-//!
-//! This module implements a vault management system for Solana programs using the Anchor framework.
-//! It provides secure handling of SOL and MIMING token transfers, teleportation, and multisig transaction proposals,
-//! with full ledger recording and error handling.
-//!
-//! ## Features
-//!
-//! - **Vault Ledger Management:** Track SOL and MIMING token movements with detailed ledger entries.
-//! - **Teleportation and Transfer:** Move assets between users and the vault, with automatic ledger updates.
-//! - **Multisig Proposal Support:** Create and manage transaction proposals requiring multisig approval.
-//! - **Error Handling:** Custom error codes for insufficient balances and transaction failures.
-//!
-//! ## Main Data Structures
-//!
-//! - [`VaultTransaction`]: Enum representing supported vault transactions (Teleport, Transfer).
-//! - [`VaultLedger`]: Struct representing a single ledger entry for SOL or MIMING tokens.
-//! - [`VaultLedgerAccount`]: Account storing SOL and MIMING ledgers.
-//! - [`VaultTransactionProposalAccount`]: Account for multisig transaction proposals.
-//! - [`VaultTransactionProposalStatus`]: Enum for proposal status (Pending, Approved).
-//!
-//! ## Instructions
-//!
-//! - [`VaultInstructions::teleport`]: Teleports SOL and MIMING tokens from a user to the vault.
-//! - [`VaultInstructions::transfer`]: Transfers SOL and MIMING tokens from the vault to a recipient.
-//!
-//! ## Accounts
-//!
-//! - [`VaultInitialization`]: Initializes the vault ledger identifier.
-//! - [`VaultTeleport`]: Context for teleporting assets into the vault.
-//! - [`Transfer`]: Context for transferring assets from the vault.
-//!
-//! ## Error Handling
-//!
-//! Custom error codes are defined in [`VaultErrorCode`] to handle insufficient SOL or MIMING token balances.
-//!
-//! ## Constants
-//!
-//! - Size constants for account and ledger serialization.
-//!
-//! ## Usage
-//!
-//! 1. **Initialize** the vault using `VaultInitialization`.
-//! 2. **Teleport assets** into the vault using `VaultInstructions::teleport`.
-//! 3. **Transfer assets** from the vault using `VaultInstructions::transfer`.
-//! 4. **Propose and approve** multisig transactions as needed.
-//!
-//! ## Security Considerations
-//!
-//! - All transfers check for sufficient balances before proceeding.
-//! - Multisig proposals require explicit approval before execution.
-//! - Ledger entries are updated atomically with each transaction.
-//!
-//! ## Integration
-//!
-//! This module is intended to be used as part of a larger Solana program that requires
-//! secure, auditable asset management with support for multisig operations.
 use anchor_lang::prelude::*;
 use crate::{
     states::{
@@ -64,25 +7,17 @@ use crate::{
             PUBKEY_SIZE,
             MIMING_FEE
         },
-        events::{VaultTeleportSuccessful, VaultTransferSuccessful},
+        events::VaultLedgerEvent,
         errors::VaultErrorCode,
     },
-    multisig::MAX_SIGNERS,
+    multisig::{MAX_SIGNERS, MultisigAccount},
     IdentifierAccount
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub enum VaultTransaction {
-    Teleport { 
-        token: Pubkey, 
-        from: Pubkey, 
-        amount: u64 
-    },
-    Transfer { 
-        token: Pubkey, 
-        to: Pubkey, 
-        amount: u64 
-    },
+    Teleport { from: Pubkey, amount: u64  },
+    Transfer { to: Pubkey, amount: u64  },
 }
 
 pub const TRANSACTION_SIZE: usize = DISCRIMINATOR + 
@@ -106,9 +41,9 @@ pub const LEDGER_SIZE: usize = DISCRIMINATOR +
 pub struct VaultLedger {
     pub id: u64,
     pub user: Pubkey,
-    pub token_address: Pubkey,
     pub transaction: VaultTransaction,
-    pub amount: i64
+    pub amount: i64,
+    pub miming_fee: u64
 }
 
 #[account]
@@ -124,21 +59,21 @@ impl VaultLedgerAccount {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-pub enum VaultTransactionProposalStatus {
+pub enum VaultTransferProposalStatus {
     Pending,
     Approved,
 }
 
 #[account]
-pub struct VaultTransactionProposalAccount {
+pub struct VaultTransferProposalAccount {
     pub id: u64,
     pub transaction: VaultTransaction,
     pub multisig_required_signers: Vec<Pubkey>,
     pub multisig_signers: Vec<Pubkey>,
-    pub status: VaultTransactionProposalStatus,
+    pub status: VaultTransferProposalStatus,
 }
 
-impl VaultTransactionProposalAccount {
+impl VaultTransferProposalAccount {
     pub const LEN: usize = DISCRIMINATOR + 
         // id
         U64_SIZE + 
@@ -194,47 +129,9 @@ pub struct VaultTeleport<'info> {
     pub system_program: Program<'info, System>,
 }
 
-#[derive(Accounts)]
-pub struct Transfer<'info> {
-    #[account(mut)]
-    pub recipient: Signer<'info>,
+pub struct VaultTeleportInstructions;
 
-    /// CHECK: This is the PDA authority for the vault, no need to deserialize
-    #[account(
-        mut,
-        seeds = [b"vault"],
-        bump
-    )]
-    pub vault: AccountInfo<'info>,
-
-    #[account(mut)]
-    pub ledger_identifier: Account<'info, IdentifierAccount>,
-
-    #[account(mut)]
-    pub ledger: Account<'info, VaultLedgerAccount>,
-
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-pub struct VaultInstructions { }
-
-impl VaultInstructions {
-    /// Teleports SOL and MIMING tokens from a user to the vault and updates the ledger.
-    ///
-    /// This instruction:
-    /// - Transfers the specified amount of SOL from the teleporter to the vault, including a fixed MIMING transfer fee.
-    /// - Increments the ledger identifier and records the SOL teleport transaction in the ledger.
-    /// - Emits a `VaultTeleportSuccessful` event with details of the teleport.
-    ///
-    /// ## Arguments
-    ///
-    /// * `ctx` - The context containing the accounts required for the teleport operation.
-    /// * `amount` - The amount of SOL to teleport from the teleporter to the vault (fee will be added).
-    ///
-    /// ## Returns
-    ///
-    /// Returns `Ok(())` if the teleport is successful, otherwise returns an error.
+impl VaultTeleportInstructions {
     pub fn teleport(ctx: Context<VaultTeleport>, amount: u64) -> Result<()> {
         let teleporter = &ctx.accounts.teleporter;
         let vault = &ctx.accounts.vault;
@@ -264,94 +161,204 @@ impl VaultInstructions {
         ledger.ledger = VaultLedger {
             id: ledger_identifier.id,
             user: teleporter.key(),
-            token_address: Pubkey::default(),
             transaction: VaultTransaction::Teleport { 
-                token: Pubkey::default(), 
                 from: teleporter.key(), 
                 amount: amount
             },
             amount: amount as i64,
-        };
-        ledger.ledger = VaultLedger {
-            id: ledger_identifier.id,
-            user: teleporter.key(),
-            token_address: Pubkey::default(),
-            transaction: VaultTransaction::Teleport { 
-                token: Pubkey::default(), 
-                from: teleporter.key(), 
-                amount: MIMING_FEE
-            },
-            amount: MIMING_FEE as i64,
+            miming_fee: MIMING_FEE,
         };
 
-        emit!(VaultTeleportSuccessful {
+        emit!(VaultLedgerEvent {
             id: ledger_identifier.id,
-            user: teleporter.key(),
-            sol_amount: amount,
-            miming_fee: MIMING_FEE,
+            data: ledger.ledger.clone()
         });
 
         Ok(())
     }
+}
 
-    /// Implements the instructions for managing a multisig account.
-    /// Initializes the multisig account and proposal identifier.
-    ///
-    /// This function sets up the initial state for the multisig by:
-    /// - Setting the proposal identifier's `id` to 0.
-    /// - Initializing the multisig account with:
-    ///   - `name` set to "System"
-    ///   - `threshold` set to 0
-    ///   - An empty list of `signers`
-    ///
-    /// ## Arguments
-    ///
-    /// * `ctx` - The context containing the accounts required for multisig initialization.
-    ///
-    /// ## Returns
-    ///
-    /// Returns `Ok(())` if initialization is successful, otherwise returns an error.
-    pub fn transfer(ctx: Context<Transfer>, amount: u64) -> Result<()> {
-        let recipient = &ctx.accounts.recipient;
-        let vault = &ctx.accounts.vault;
+#[derive(Accounts)]
+pub struct VaultCreateTransferProposal<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
 
-        let vault_sol_balance = vault.to_account_info().lamports();
-        require!(
-            vault_sol_balance >= amount,
-            VaultErrorCode::InsufficientSolBalance
-        );
+    #[account(mut)]
+    pub current_multisig: Account<'info, MultisigAccount>,
 
-        let sol_transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
-            &vault.key(),
-            &recipient.key(),
-            amount,
-        );
-        anchor_lang::solana_program::program::invoke(
-            &sol_transfer_instruction,
-            &[recipient.to_account_info(), vault.to_account_info()],
-        )?;
+    #[account(mut)]
+    pub transfer_proposal_identifier: Account<'info, IdentifierAccount>,
 
-        let ledger_identifier = &mut ctx.accounts.ledger_identifier;
-        ledger_identifier.id += 1;
+    #[account(
+        init_if_needed,
+        payer = signer,
+        space = 8 + VaultTransferProposalAccount::LEN,
+        seeds = [
+            b"transfer_proposal", 
+            transfer_proposal_identifier.id.to_le_bytes().as_ref()
+        ],
+        bump
+    )]
+    pub transfer_proposal: Account<'info, VaultTransferProposalAccount>,
 
-        let ledger = &mut ctx.accounts.ledger;
-        ledger.ledger = VaultLedger {
-            id: ledger_identifier.id,
-            user: recipient.key(),
-            token_address: Pubkey::default(),
-            transaction: VaultTransaction::Transfer { 
-                token: Pubkey::default(), 
-                to: recipient.key(), 
-                amount: amount
-            },
-            amount: (amount as i64) * -1,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct VaultSignTransferProposal<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    #[account(mut)]
+    pub current_multisig: Account<'info, MultisigAccount>,
+
+    #[account(mut)]
+    pub current_transfer_proposal: Account<'info, VaultTransferProposalAccount>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct VaultExecuteTransferProposal<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    #[account(mut)]
+    pub current_multisig: Account<'info, MultisigAccount>,
+
+    #[account(mut)]
+    pub current_transfer_proposal: Account<'info, VaultTransferProposalAccount>,
+
+    /// CHECK: This is the PDA authority for the vault, no need to deserialize
+    #[account(
+        mut,
+        seeds = [b"vault"],
+        bump
+    )]
+    pub vault: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub ledger_identifier: Account<'info, IdentifierAccount>,
+
+    #[account(mut)]
+    pub ledger: Account<'info, VaultLedgerAccount>,
+
+    pub system_program: Program<'info, System>,
+}
+
+pub struct VaultTransferProposalInstructions;
+
+impl VaultTransferProposalInstructions {
+    pub fn create_transfer_proposal(ctx: Context<VaultCreateTransferProposal>, recipient: Pubkey, amount: u64) -> Result<()> {
+        let transfer_proposal_identifier = &mut ctx.accounts.transfer_proposal_identifier;
+        transfer_proposal_identifier.id += 1;
+
+        let current_multisig = &ctx.accounts.current_multisig;
+        let multisig_required_signers: Vec<Pubkey> = current_multisig.signers.iter().map(|d| d.pubkey).collect();
+
+        let transfer_proposal = &mut ctx.accounts.transfer_proposal;
+        transfer_proposal.id = transfer_proposal_identifier.id;
+        transfer_proposal.transaction = VaultTransaction::Transfer { 
+            to: recipient, 
+            amount: amount 
         };
+        transfer_proposal.multisig_required_signers = multisig_required_signers.clone();
+        transfer_proposal.multisig_signers = Vec::new();
+        transfer_proposal.status = VaultTransferProposalStatus::Pending;
 
-        emit!(VaultTransferSuccessful {
-            id: ledger_identifier.id,
-            user: vault.key(),
-            sol_amount: amount,
-        });
+        Ok(())
+    }
+
+    pub fn sign_transfer_proposal(ctx: Context<VaultSignTransferProposal>) -> Result<()> {
+        let signer_key = ctx.accounts.signer.key();
+        let current_transfer_proposal = &mut ctx.accounts.current_transfer_proposal;
+
+        require!(
+            current_transfer_proposal.status == VaultTransferProposalStatus::Pending,
+            VaultErrorCode::AlreadyResolved
+        );
+
+        if current_transfer_proposal.multisig_required_signers.len() > 0 {
+            require!(
+                current_transfer_proposal.multisig_required_signers.contains(&signer_key),
+                VaultErrorCode::UnauthorizedSigner
+            );
+        }
+
+        if current_transfer_proposal.multisig_signers.len() > 0 {
+            require!(
+                !current_transfer_proposal.multisig_signers.contains(&signer_key),
+                VaultErrorCode::DuplicateSignature
+            );
+        }
+
+        current_transfer_proposal.multisig_signers.push(signer_key);
+
+        Ok(())
+    }
+
+    pub fn execute_transfer_proposal(ctx: Context<VaultExecuteTransferProposal>) -> Result<()> {
+        let signer_key = ctx.accounts.signer.key();
+        let current_transfer_proposal = &mut ctx.accounts.current_transfer_proposal;
+
+        require!(
+            current_transfer_proposal.status == VaultTransferProposalStatus::Pending,
+            VaultErrorCode::AlreadyResolved
+        );
+
+        if current_transfer_proposal.multisig_required_signers.len() > 0 {
+            require!(
+                current_transfer_proposal.multisig_required_signers.contains(&signer_key),
+                VaultErrorCode::UnauthorizedSigner
+            );
+        }
+
+        let all_signed = current_transfer_proposal
+            .multisig_required_signers
+            .iter()
+            .all(|req| current_transfer_proposal.multisig_signers.contains(req));
+
+        require!(all_signed, VaultErrorCode::InsufficientSignatures);
+
+        if let VaultTransaction::Transfer { to, amount } = current_transfer_proposal.transaction {
+            let vault = &ctx.accounts.vault;
+
+            let vault_sol_balance = vault.to_account_info().lamports();
+            require!(
+                vault_sol_balance >= amount,
+                VaultErrorCode::InsufficientSolBalance
+            );
+
+            let sol_transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
+                &vault.key(),
+                &to,
+                amount,
+            );
+            anchor_lang::solana_program::program::invoke(
+                &sol_transfer_instruction,
+                &[vault.to_account_info()],
+            )?;
+
+            let ledger_identifier = &mut ctx.accounts.ledger_identifier;
+            ledger_identifier.id += 1;
+
+            let ledger = &mut ctx.accounts.ledger;
+            ledger.ledger = VaultLedger {
+                id: ledger_identifier.id,
+                user: vault.key(),
+                transaction: VaultTransaction::Transfer { 
+                    to: to, 
+                    amount: amount
+                },
+                amount: (amount as i64) * -1,
+                miming_fee: 0, 
+            };
+
+            emit!(VaultLedgerEvent {
+                id: ledger_identifier.id,
+                data: ledger.ledger.clone()
+            });
+        }
 
         Ok(())
     }

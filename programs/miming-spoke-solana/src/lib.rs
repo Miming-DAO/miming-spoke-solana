@@ -123,7 +123,7 @@ pub mod miming_spoke_solana {
     /// * `ctx` - The context for the `VaultTeleport` instruction.
     /// * `amount` - The amount of tokens to teleport.
     pub fn vault_teleport(ctx: Context<VaultTeleport>, amount: u64) -> Result<()> {
-        vault::VaultInstructions::teleport(ctx, amount)
+        vault::VaultTeleportInstructions::teleport(ctx, amount)
     }
 
     /// Freezes a staking account.

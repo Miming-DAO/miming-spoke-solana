@@ -174,8 +174,7 @@ pub struct StakingThaw<'info> {
     pub system_program: Program<'info, System>,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-pub struct StakingInstructions {}
+pub struct StakingInstructions;
 
 impl StakingInstructions {
     /// Freezes the staker's token account and records a reference identifier in the staking registry.
