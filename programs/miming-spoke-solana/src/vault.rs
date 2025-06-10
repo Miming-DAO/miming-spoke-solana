@@ -59,6 +59,7 @@
 //!
 //! - The module includes a placeholder for Raydium proxy instructions, allowing future integration with DeFi protocols or additional vault operations.
 use anchor_lang::prelude::*;
+use solana_program::native_token::LAMPORTS_PER_SOL;
 use crate::{
     states::{
         constants::{
@@ -102,7 +103,7 @@ pub struct VaultLedger {
     pub id: u64,
     pub user: Pubkey,
     pub transaction: VaultTransaction,
-    pub amount: i64,
+    pub amount: u64,
     pub miming_fee: u64
 }
 
@@ -127,6 +128,28 @@ pub struct VaultInitialization<'info> {
     pub ledger_identifier: Account<'info, IdentifierAccount>,
 
     pub system_program: Program<'info, System>,
+}
+
+pub struct VaultInitializationInstructions;
+
+impl VaultInitializationInstructions {
+    /// Initializes the vault by setting up its initial state.
+    ///
+    /// This function performs the following actions:
+    /// - Sets the `id` field of the `ledger_identifier` account to 0.
+    ///
+    /// ## Arguments
+    ///
+    /// * `ctx` - The context containing the accounts required for vault initialization.
+    ///
+    /// ## Returns
+    ///
+    /// Returns `Ok(())` if the initialization is successful, otherwise returns an error.
+    pub fn initialize(ctx: Context<VaultInitialization>) -> Result<()> {
+        ctx.accounts.ledger_identifier.id = 0;
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -184,7 +207,7 @@ impl VaultTeleportInstructions {
         let signer = &ctx.accounts.signer;
         let total_amount = amount + MIMING_FEE;
         let signer_sol_balance = signer.to_account_info().lamports();
-
+        
         require!(
             signer_sol_balance >= total_amount,
             VaultErrorCode::InsufficientSolBalance
@@ -203,7 +226,6 @@ impl VaultTeleportInstructions {
         )?;
 
         let ledger_identifier = &mut ctx.accounts.ledger_identifier;
-        ledger_identifier.id += 1;
 
         let ledger = &mut ctx.accounts.ledger;
         ledger.ledger = VaultLedger {
@@ -213,9 +235,11 @@ impl VaultTeleportInstructions {
                 from: signer.key(), 
                 amount: amount
             },
-            amount: amount as i64,
+            amount: amount,
             miming_fee: MIMING_FEE,
         };
+        
+        ledger_identifier.id += 1;
 
         emit!(VaultLedgerLogEvent {
             id: ledger_identifier.id,
@@ -349,7 +373,6 @@ impl VaultTransferProposalInstructions {
     /// Returns `Ok(())` if the proposal is created successfully, otherwise returns an error.
     pub fn create_transfer_proposal(ctx: Context<VaultCreateTransferProposal>, recipient: Pubkey, amount: u64) -> Result<()> {
         let transfer_proposal_identifier = &mut ctx.accounts.transfer_proposal_identifier;
-        transfer_proposal_identifier.id += 1;
 
         let current_multisig = &ctx.accounts.current_multisig;
         let multisig_required_signers: Vec<Pubkey> = current_multisig.signers.iter().map(|d| d.pubkey).collect();
@@ -363,6 +386,8 @@ impl VaultTransferProposalInstructions {
         transfer_proposal.multisig_required_signers = multisig_required_signers;
         transfer_proposal.multisig_signers = Vec::new();
         transfer_proposal.status = VaultTransferProposalStatus::Pending;
+
+        transfer_proposal_identifier.id += 1;
 
         Ok(())
     }
@@ -472,7 +497,6 @@ impl VaultTransferProposalInstructions {
             )?;
 
             let ledger_identifier = &mut ctx.accounts.ledger_identifier;
-            ledger_identifier.id += 1;
 
             let ledger = &mut ctx.accounts.ledger;
             ledger.ledger = VaultLedger {
@@ -482,9 +506,11 @@ impl VaultTransferProposalInstructions {
                     to: to, 
                     amount: amount
                 },
-                amount: (amount as i64) * -1,
+                amount: -(amount as i64) as u64,
                 miming_fee: 0, 
             };
+            
+            ledger_identifier.id += 1;
 
             emit!(VaultLedgerLogEvent {
                 id: ledger_identifier.id,
@@ -502,9 +528,6 @@ impl VaultTransferProposalInstructions {
 ///
 /// - The `RaydiumProxyInstructions` struct is defined but not yet implemented. 
 ///   Please implement the logic for Raydium proxy instructions as needed for your application.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-pub struct RaydiumProxyInstructions { }
+pub struct RaydiumProxyInstructions;
 
-impl RaydiumProxyInstructions {
-    
-}
+impl RaydiumProxyInstructions { }

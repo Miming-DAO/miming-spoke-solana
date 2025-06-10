@@ -290,7 +290,6 @@ impl MultisigInstructions {
         );
 
         let proposal_identifier = &mut ctx.accounts.proposal_identifier;
-        proposal_identifier.id += 1;
 
         let current_multisig = &ctx.accounts.current_multisig;
         let required_signers = current_multisig.signers.iter().map(|d| d.pubkey).collect();
@@ -305,6 +304,8 @@ impl MultisigInstructions {
         proposal.required_signers = required_signers;
         proposal.signers = Vec::new();
         proposal.status = MultisigProposalStatus::Pending;
+        
+        proposal_identifier.id += 1;
 
         Ok(())
     }

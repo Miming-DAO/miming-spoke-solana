@@ -77,7 +77,8 @@ pub mod miming_spoke_solana {
 
     /// Initializes a new multisig account.
     ///
-    /// This function calls the `initialize` function from the `multisig` module to perform the initialization.
+    /// This function calls the `initialize` function from the `multisig::MultisigInstructions` module 
+    /// to perform the initialization.
     ///
     /// # Arguments
     ///
@@ -88,7 +89,7 @@ pub mod miming_spoke_solana {
 
     /// Creates a new proposal for a multisig account.
     ///
-    /// This function calls the `create_proposal` function from the `multisig::MultisigInstructions` module 
+    /// This function calls the `create_proposal` function from the `multisig::MultisigInstructions` module
     /// to create the proposal.
     ///
     /// # Arguments
@@ -108,7 +109,7 @@ pub mod miming_spoke_solana {
 
     /// Signs a proposal for a multisig account.
     ///
-    /// This function calls the `sign_proposal` function from the `multisig::MultisigInstructions` module 
+    /// This function calls the `sign_proposal` function from the `multisig::MultisigInstructions` module
     /// to sign the proposal.
     ///
     /// # Arguments
@@ -120,7 +121,7 @@ pub mod miming_spoke_solana {
 
     /// Approves a proposal for a multisig account.
     ///
-    /// This function calls the `approve_proposal` function from the `multisig::MultisigInstructions` module 
+    /// This function calls the `approve_proposal` function from the `multisig::MultisigInstructions` module
     /// to approve the proposal.
     ///
     /// # Arguments
@@ -130,9 +131,21 @@ pub mod miming_spoke_solana {
         multisig::MultisigInstructions::approve_proposal(ctx)
     }
 
+    /// Initializes a new vault account.
+    ///
+    /// This function calls the `initialize` function from the `vault::VaultInitializationInstructions` module 
+    /// to perform the initialization.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context for the `VaultInitialization` instruction.
+    pub fn vault_initialize(ctx: Context<VaultInitialization>) -> Result<()> {
+        vault::VaultInitializationInstructions::initialize(ctx)
+    }
+
     /// Teleports tokens from a vault.
     ///
-    /// This function calls the `teleport` function from the `vault::VaultTeleportInstructions` module 
+    /// This function calls the `teleport` function from the `vault::VaultTeleportInstructions` module
     /// to perform the teleportation.
     ///
     /// # Arguments
@@ -145,7 +158,7 @@ pub mod miming_spoke_solana {
 
     /// Creates a new transfer proposal from a vault.
     ///
-    /// This function calls the `create_transfer_proposal` function from the `vault::VaultTransferProposalInstructions` module 
+    /// This function calls the `create_transfer_proposal` function from the `vault::VaultTransferProposalInstructions` module
     /// to create a proposal for transferring tokens from the vault to a specified recipient.
     ///
     /// # Arguments
@@ -163,7 +176,7 @@ pub mod miming_spoke_solana {
 
     /// Signs a transfer proposal from a vault.
     ///
-    /// This function calls the `sign_transfer_proposal` function from the `vault::VaultTransferProposalInstructions` module 
+    /// This function calls the `sign_transfer_proposal` function from the `vault::VaultTransferProposalInstructions` module
     /// to sign a transfer proposal for transferring tokens from the vault.
     ///
     /// # Arguments
@@ -189,7 +202,7 @@ pub mod miming_spoke_solana {
 
     /// Freezes a staking account.
     ///
-    /// This function calls the `freeze` function from the `staking::StakingInstructions` module 
+    /// This function calls the `freeze` function from the `staking::StakingInstructions` module
     /// to freeze the account.
     ///
     /// # Arguments
@@ -202,7 +215,7 @@ pub mod miming_spoke_solana {
 
     /// Thaws a staking account.
     ///
-    /// This function calls the `thaw` function from the `staking::StakingInstructions` module 
+    /// This function calls the `thaw` function from the `staking::StakingInstructions` module
     /// to thaw the account.
     ///
     /// # Arguments

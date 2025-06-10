@@ -121,7 +121,7 @@ describe("03-staking-tests", () => {
             .rpc().catch((err: any) => {
                 expect(err).to.have.property("error");
                 expect(err.error.errorCode?.code).to.equal("InsufficientStakingBalance");
-                expect(err.error.errorMessage).to.equal("Insufficient token balance to stake.");
+                expect(err.error.errorMessage).to.equal("Token balance is too low to complete the staking request.");
             });
 
         const stakerTokenInfo = await getAccount(connection, variables.stakerToken);
