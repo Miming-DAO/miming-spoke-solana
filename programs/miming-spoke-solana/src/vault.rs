@@ -58,8 +58,7 @@
 //! ## Extensibility
 //!
 //! - The module includes a placeholder for Raydium proxy instructions, allowing future integration with DeFi protocols or additional vault operations.
-use anchor_lang::prelude::*;
-use solana_program::native_token::LAMPORTS_PER_SOL;
+use anchor_lang::{prelude::*, system_program};
 use crate::{
     states::{
         constants::{
@@ -77,7 +76,6 @@ use crate::{
 
 pub const TRANSACTION_SIZE: usize = DISCRIMINATOR + 
     PUBKEY_SIZE + 
-    PUBKEY_SIZE + 
     U64_SIZE;
 
 pub const LEDGER_SIZE: usize = DISCRIMINATOR + 
@@ -90,7 +88,9 @@ pub const LEDGER_SIZE: usize = DISCRIMINATOR +
     // transaction
     ENUM_SIZE + TRANSACTION_SIZE + 
     // amount
-    U64_SIZE; 
+    U64_SIZE + 
+    // miming_fee
+    U64_SIZE;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub enum VaultTransaction {
@@ -103,7 +103,8 @@ pub struct VaultLedger {
     pub id: u64,
     pub user: Pubkey,
     pub transaction: VaultTransaction,
-    pub amount: u64,
+    pub balance_in: u64,
+    pub balance_out: u64,
     pub miming_fee: u64
 }
 
@@ -126,6 +127,9 @@ pub struct VaultInitialization<'info> {
 
     #[account(init, payer = signer, space = 8 + IdentifierAccount::LEN, seeds = [b"ledger_identifier"], bump)]
     pub ledger_identifier: Account<'info, IdentifierAccount>,
+
+    #[account(init, payer = signer, space = 8 + IdentifierAccount::LEN, seeds = [b"transfer_proposal_identifier"], bump)]
+    pub transfer_proposal_identifier: Account<'info, IdentifierAccount>,
 
     pub system_program: Program<'info, System>,
 }
@@ -207,7 +211,7 @@ impl VaultTeleportInstructions {
         let signer = &ctx.accounts.signer;
         let total_amount = amount + MIMING_FEE;
         let signer_sol_balance = signer.to_account_info().lamports();
-        
+
         require!(
             signer_sol_balance >= total_amount,
             VaultErrorCode::InsufficientSolBalance
@@ -235,7 +239,8 @@ impl VaultTeleportInstructions {
                 from: signer.key(), 
                 amount: amount
             },
-            amount: amount,
+            balance_in: amount,
+            balance_out: 0u64,
             miming_fee: MIMING_FEE,
         };
         
@@ -253,7 +258,7 @@ impl VaultTeleportInstructions {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub enum VaultTransferProposalStatus {
     Pending,
-    Approved,
+    Executed,
 }
 
 #[account]
@@ -338,10 +343,23 @@ pub struct VaultExecuteTransferProposal<'info> {
     )]
     pub vault: AccountInfo<'info>,
 
+    /// CHECK: This is the recipient wallet; SOL will be transferred here
+    #[account(mut)]
+    pub recipient: AccountInfo<'info>,
+
     #[account(mut)]
     pub ledger_identifier: Account<'info, IdentifierAccount>,
 
-    #[account(mut)]
+    #[account(
+        init_if_needed,
+        payer = signer,
+        space = 8 + VaultLedgerAccount::LEN,
+        seeds = [
+            b"ledger", 
+            ledger_identifier.id.to_le_bytes().as_ref()
+        ],
+        bump
+    )]
     pub ledger: Account<'info, VaultLedgerAccount>,
 
     pub system_program: Program<'info, System>,
@@ -478,7 +496,18 @@ impl VaultTransferProposalInstructions {
 
         if let VaultTransaction::Transfer { to, amount } = current_transfer_proposal.transaction {
             let vault = &ctx.accounts.vault;
+            let vault_seeds: &[&[u8]] = &[
+                b"vault",
+                &[ctx.bumps.vault],
+            ];
+            let recipient = &ctx.accounts.recipient;
+            let system_program = &ctx.accounts.system_program;
             let vault_sol_balance = vault.to_account_info().lamports();
+            
+            require!(
+                recipient.key() == to,
+                VaultErrorCode::InvalidRecipient
+            );
 
             require!(
                 vault_sol_balance >= amount,
@@ -487,13 +516,18 @@ impl VaultTransferProposalInstructions {
 
             let sol_transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
                 &vault.key(),
-                &to,
+                &recipient.key(),
                 amount,
             );
 
-            anchor_lang::solana_program::program::invoke(
+            anchor_lang::solana_program::program::invoke_signed(
                 &sol_transfer_instruction,
-                &[vault.to_account_info()],
+                &[
+                    vault.to_account_info(),
+                    recipient.to_account_info(),
+                    system_program.to_account_info(),
+                ],
+                &[vault_seeds],
             )?;
 
             let ledger_identifier = &mut ctx.accounts.ledger_identifier;
@@ -506,7 +540,8 @@ impl VaultTransferProposalInstructions {
                     to: to, 
                     amount: amount
                 },
-                amount: -(amount as i64) as u64,
+                balance_in: 0u64,
+                balance_out: amount,
                 miming_fee: 0, 
             };
             
@@ -517,6 +552,8 @@ impl VaultTransferProposalInstructions {
                 data: ledger.ledger.clone()
             });
         }
+
+        current_transfer_proposal.status = VaultTransferProposalStatus::Executed;
 
         Ok(())
     }

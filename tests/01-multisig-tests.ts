@@ -13,15 +13,15 @@ const connection = program.provider.connection;
 const [proposalIdentifierPda] = PublicKey.findProgramAddressSync([Buffer.from("proposal_identifier")], program.programId);
 const [multisigPda] = PublicKey.findProgramAddressSync([Buffer.from("multisig")], program.programId);
 
+const signer = Keypair.generate();
+const target = Keypair.generate();
+
+let firstSigners: { name: string; pubkey: PublicKey; keypair: Keypair; }[] = [];
+let secondSigners: { name: string; pubkey: PublicKey; keypair: Keypair; }[] = [];
+let thirdSigners: { name: string; pubkey: PublicKey; keypair: Keypair; }[] = [];
+let fourthSigners: { name: string; pubkey: PublicKey; keypair: Keypair; }[] = [];
+
 describe("01-multisig-tests", () => {
-    const signer = Keypair.generate();
-    const target = Keypair.generate();
-
-    let firstSigners: { name: string; pubkey: PublicKey; keypair: Keypair; }[] = [];
-    let secondSigners: { name: string; pubkey: PublicKey; keypair: Keypair; }[] = [];
-    let thirdSigners: { name: string; pubkey: PublicKey; keypair: Keypair; }[] = [];
-    let fourthSigners: { name: string; pubkey: PublicKey; keypair: Keypair; }[] = [];
-
     it("should initialize multisig.", async () => {
         const signer = Keypair.generate();
 
@@ -945,3 +945,5 @@ describe("01-multisig-tests", () => {
             });
     });
 });
+
+export { fourthSigners };

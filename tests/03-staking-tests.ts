@@ -11,7 +11,7 @@ anchor.setProvider(provider);
 const program = anchor.workspace.mimingSpokeSolana as anchor.Program<MimingSpokeSolana>;
 const connection = program.provider.connection;
 
-const setupTestVariables = async () => {
+const setupVariables = async () => {
     const staker = Keypair.generate();
 
     await connection.requestAirdrop(staker.publicKey, 2e9);
@@ -48,7 +48,7 @@ const setupTestVariables = async () => {
 
 describe("03-staking-tests", () => {
     it("should freeze tokens with sufficient balance", async () => {
-        const variables = await setupTestVariables();
+        const variables = await setupVariables();
 
         await mintTo(
             connection,
@@ -90,7 +90,7 @@ describe("03-staking-tests", () => {
     });
 
     it("should fail if the staker has an insufficient balance (InsufficientStakingBalance)", async () => {
-        const variables = await setupTestVariables();
+        const variables = await setupVariables();
 
         await mintTo(
             connection,
@@ -136,7 +136,7 @@ describe("03-staking-tests", () => {
         expect(stakingRegistry).to.be.null;
     });
     it("should thaw tokens after they've been frozen", async () => {
-        const variables = await setupTestVariables();
+        const variables = await setupVariables();
 
         await mintTo(
             connection,
@@ -199,7 +199,7 @@ describe("03-staking-tests", () => {
     });
 
     it("should update the registry after the tokens are thawed and then frozen again.", async () => {
-        const variables = await setupTestVariables();
+        const variables = await setupVariables();
 
         await mintTo(
             connection,

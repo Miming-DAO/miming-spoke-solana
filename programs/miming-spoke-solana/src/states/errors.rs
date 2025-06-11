@@ -43,4 +43,7 @@ pub enum VaultErrorCode {
 
     #[msg("The minimum required signatures have not been met.")]
     InsufficientSignatures,
+
+    #[msg("The public key is not a valid recipient for this transaction.")]
+    InvalidRecipient,
 }

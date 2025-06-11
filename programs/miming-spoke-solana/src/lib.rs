@@ -77,7 +77,7 @@ pub mod miming_spoke_solana {
 
     /// Initializes a new multisig account.
     ///
-    /// This function calls the `initialize` function from the `multisig::MultisigInstructions` module 
+    /// This function calls the `initialize` function from the `multisig::MultisigInstructions` module
     /// to perform the initialization.
     ///
     /// # Arguments
@@ -133,7 +133,7 @@ pub mod miming_spoke_solana {
 
     /// Initializes a new vault account.
     ///
-    /// This function calls the `initialize` function from the `vault::VaultInitializationInstructions` module 
+    /// This function calls the `initialize` function from the `vault::VaultInitializationInstructions` module
     /// to perform the initialization.
     ///
     /// # Arguments
