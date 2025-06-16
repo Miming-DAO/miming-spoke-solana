@@ -12,7 +12,7 @@ miming_spoke_solana = "3e2igyWExmDZmJfRpMRwn5mrM838Fam3AMzPYvttxRT8"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "Localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

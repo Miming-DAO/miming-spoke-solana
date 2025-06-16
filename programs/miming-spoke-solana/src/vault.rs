@@ -60,23 +60,17 @@
 //! - The module includes a placeholder for Raydium proxy instructions, allowing future integration with DeFi protocols or additional vault operations.
 use anchor_lang::{prelude::*, system_program};
 use crate::{
-    states::{
+    multisig::{MultisigAccount, MAX_SIGNERS}, states::{
         constants::{
-            DISCRIMINATOR, U64_SIZE, 
-            ENUM_SIZE, VEC_SIZE, 
-            PUBKEY_SIZE,
-            MIMING_FEE
-        },
-        events::VaultLedgerLogEvent,
-        errors::VaultErrorCode,
-    },
-    multisig::{MAX_SIGNERS, MultisigAccount},
-    IdentifierAccount
+            DISCRIMINATOR, ENUM_SIZE, MIMING_FEE, PUBKEY_SIZE, U64_SIZE, VEC_SIZE, STRING_LEN
+        }, errors::VaultErrorCode, events::VaultLedgerLogEvent
+    }, IdentifierAccount
 };
 
 pub const TRANSACTION_SIZE: usize = DISCRIMINATOR + 
     PUBKEY_SIZE + 
-    U64_SIZE;
+    U64_SIZE + 
+    STRING_LEN;
 
 pub const LEDGER_SIZE: usize = DISCRIMINATOR + 
     // id
@@ -94,8 +88,8 @@ pub const LEDGER_SIZE: usize = DISCRIMINATOR +
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub enum VaultTransaction {
-    Teleport { from: Pubkey, amount: u64  },
-    Transfer { to: Pubkey, amount: u64  },
+    Teleport { from: Pubkey, amount: u64, xode_address: String },
+    Transfer { to: Pubkey, amount: u64, xode_address: String },
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
@@ -207,7 +201,7 @@ impl VaultTeleportInstructions {
     /// ## Returns
     ///
     /// Returns `Ok(())` if the teleport operation is successful, otherwise returns an error (e.g., if the signer has insufficient balance).
-    pub fn teleport(ctx: Context<VaultTeleport>, amount: u64) -> Result<()> {
+    pub fn teleport(ctx: Context<VaultTeleport>, amount: u64, xode_address: String) -> Result<()> {
         let signer = &ctx.accounts.signer;
         let total_amount = amount + MIMING_FEE;
         let signer_sol_balance = signer.to_account_info().lamports();
@@ -237,7 +231,8 @@ impl VaultTeleportInstructions {
             user: signer.key(),
             transaction: VaultTransaction::Teleport { 
                 from: signer.key(), 
-                amount: amount
+                amount: amount,
+                xode_address: xode_address
             },
             balance_in: amount,
             balance_out: 0u64,
@@ -389,7 +384,7 @@ impl VaultTransferProposalInstructions {
     /// ## Returns
     ///
     /// Returns `Ok(())` if the proposal is created successfully, otherwise returns an error.
-    pub fn create_transfer_proposal(ctx: Context<VaultCreateTransferProposal>, recipient: Pubkey, amount: u64) -> Result<()> {
+    pub fn create_transfer_proposal(ctx: Context<VaultCreateTransferProposal>, recipient: Pubkey, amount: u64, xode_address: String) -> Result<()> {
         let transfer_proposal_identifier = &mut ctx.accounts.transfer_proposal_identifier;
 
         let current_multisig = &ctx.accounts.current_multisig;
@@ -399,7 +394,8 @@ impl VaultTransferProposalInstructions {
         transfer_proposal.id = transfer_proposal_identifier.id;
         transfer_proposal.transaction = VaultTransaction::Transfer { 
             to: recipient, 
-            amount: amount 
+            amount: amount,
+            xode_address: xode_address
         };
         transfer_proposal.multisig_required_signers = multisig_required_signers;
         transfer_proposal.multisig_signers = Vec::new();
@@ -494,7 +490,7 @@ impl VaultTransferProposalInstructions {
 
         require!(all_signed, VaultErrorCode::InsufficientSignatures);
 
-        if let VaultTransaction::Transfer { to, amount } = current_transfer_proposal.transaction {
+        if let VaultTransaction::Transfer { to, amount, xode_address } = &current_transfer_proposal.transaction {
             let vault = &ctx.accounts.vault;
             let vault_seeds: &[&[u8]] = &[
                 b"vault",
@@ -505,19 +501,19 @@ impl VaultTransferProposalInstructions {
             let vault_sol_balance = vault.to_account_info().lamports();
             
             require!(
-                recipient.key() == to,
+                recipient.key() == *to,
                 VaultErrorCode::InvalidRecipient
             );
 
             require!(
-                vault_sol_balance >= amount,
+                vault_sol_balance >= *amount,
                 VaultErrorCode::InsufficientSolBalance
             );
 
             let sol_transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
                 &vault.key(),
                 &recipient.key(),
-                amount,
+                *amount,
             );
 
             anchor_lang::solana_program::program::invoke_signed(
@@ -537,11 +533,12 @@ impl VaultTransferProposalInstructions {
                 id: ledger_identifier.id,
                 user: vault.key(),
                 transaction: VaultTransaction::Transfer { 
-                    to: to, 
-                    amount: amount
+                    to: *to, 
+                    amount: *amount,
+                    xode_address: xode_address.to_string()
                 },
                 balance_in: 0u64,
-                balance_out: amount,
+                balance_out: *amount,
                 miming_fee: 0, 
             };
             

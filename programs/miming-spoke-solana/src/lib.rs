@@ -152,8 +152,12 @@ pub mod miming_spoke_solana {
     ///
     /// * `ctx` - The context for the `VaultTeleport` instruction.
     /// * `amount` - The amount of tokens to teleport.
-    pub fn vault_teleport(ctx: Context<VaultTeleport>, amount: u64) -> Result<()> {
-        vault::VaultTeleportInstructions::teleport(ctx, amount)
+    pub fn vault_teleport(
+        ctx: Context<VaultTeleport>,
+        amount: u64,
+        xode_address: String,
+    ) -> Result<()> {
+        vault::VaultTeleportInstructions::teleport(ctx, amount, xode_address)
     }
 
     /// Creates a new transfer proposal from a vault.
@@ -170,8 +174,14 @@ pub mod miming_spoke_solana {
         ctx: Context<VaultCreateTransferProposal>,
         recipient: Pubkey,
         amount: u64,
+        xode_address: String,
     ) -> Result<()> {
-        vault::VaultTransferProposalInstructions::create_transfer_proposal(ctx, recipient, amount)
+        vault::VaultTransferProposalInstructions::create_transfer_proposal(
+            ctx,
+            recipient,
+            amount,
+            xode_address,
+        )
     }
 
     /// Signs a transfer proposal from a vault.

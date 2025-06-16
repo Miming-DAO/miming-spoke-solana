@@ -53,6 +53,7 @@ describe("02-vault-tests", () => {
         const solBalanceBefore = await connection.getBalance(signer.publicKey);
 
         const amount = new anchor.BN(2 * LAMPORTS_PER_SOL);
+        const xodeAddress = "5CJ6JNcNx2vu4bgVBkeaAFwh4XwnCmjT6HK1MprzzePm7cTY";
 
         const ledgerIdentifier = await program.account.identifierAccount.fetch(ledgerIdentifierPda);
         const [ledgerPda] = PublicKey.findProgramAddressSync([
@@ -61,7 +62,7 @@ describe("02-vault-tests", () => {
         ], program.programId);
 
         await program.methods
-            .vaultTeleport(amount)
+            .vaultTeleport(amount, xodeAddress)
             .accounts({
                 signer: signer.publicKey,
                 vault: vaultPda,
@@ -77,6 +78,7 @@ describe("02-vault-tests", () => {
         expect(ledger.ledger.transaction.teleport).to.not.be.null;
         expect(ledger.ledger.transaction.teleport.from.equals(signer.publicKey)).to.equal(true);
         expect(ledger.ledger.transaction.teleport.amount.toNumber()).to.equal(amount.toNumber());
+        expect(ledger.ledger.transaction.teleport.xodeAddress).to.equal(xodeAddress);
         expect(ledger.ledger.transaction.transfer).to.be.undefined;
         expect(ledger.ledger.balanceIn.toNumber()).to.equal(amount.toNumber());
         expect(ledger.ledger.balanceOut.toNumber()).to.equal(0);
@@ -97,6 +99,7 @@ describe("02-vault-tests", () => {
         const solBalanceBefore = await connection.getBalance(signer.publicKey);
 
         const amount = new anchor.BN(10 * LAMPORTS_PER_SOL);
+        const xodeAddress = "5CJ6JNcNx2vu4bgVBkeaAFwh4XwnCmjT6HK1MprzzePm7cTY";
 
         const ledgerIdentifier = await program.account.identifierAccount.fetch(ledgerIdentifierPda);
         const [ledgerPda] = PublicKey.findProgramAddressSync([
@@ -105,7 +108,7 @@ describe("02-vault-tests", () => {
         ], program.programId);
 
         await program.methods
-            .vaultTeleport(amount)
+            .vaultTeleport(amount, xodeAddress)
             .accounts({
                 signer: signer.publicKey,
                 vault: vaultPda,
@@ -145,8 +148,9 @@ describe("02-vault-tests", () => {
         ], program.programId);
 
         const amount = new anchor.BN(1 * LAMPORTS_PER_SOL);
+        const xodeAddress = "5CJ6JNcNx2vu4bgVBkeaAFwh4XwnCmjT6HK1MprzzePm7cTY";
 
-        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount)
+        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount, xodeAddress)
             .accounts({
                 signer: signer.publicKey,
                 currentMultisig: multisigPda,
@@ -190,8 +194,9 @@ describe("02-vault-tests", () => {
         ], program.programId);
 
         const amount = new anchor.BN(1 * LAMPORTS_PER_SOL);
+        const xodeAddress = "5CJ6JNcNx2vu4bgVBkeaAFwh4XwnCmjT6HK1MprzzePm7cTY";
 
-        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount)
+        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount, xodeAddress)
             .accounts({
                 signer: signer.publicKey,
                 currentMultisig: multisigPda,
@@ -259,8 +264,9 @@ describe("02-vault-tests", () => {
         ], program.programId);
 
         const amount = new anchor.BN(1 * LAMPORTS_PER_SOL);
+        const xodeAddress = "5CJ6JNcNx2vu4bgVBkeaAFwh4XwnCmjT6HK1MprzzePm7cTY";
 
-        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount)
+        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount, xodeAddress)
             .accounts({
                 signer: signer.publicKey,
                 currentMultisig: multisigPda,
@@ -341,6 +347,7 @@ describe("02-vault-tests", () => {
         expect(ledger.ledger.transaction.transfer).to.not.be.null;
         expect(ledger.ledger.transaction.transfer.to.equals(recipient.publicKey)).to.equal(true);
         expect(ledger.ledger.transaction.transfer.amount.toNumber()).to.equal(amount.toNumber());
+        expect(ledger.ledger.transaction.transfer.xodeAddress).to.equal(xodeAddress);
         expect(ledger.ledger.transaction.teleport).to.be.undefined;
         expect(ledger.ledger.balanceIn.toNumber()).to.equal(0);
         expect(ledger.ledger.balanceOut.toNumber()).to.equal(amount.toNumber());
@@ -385,8 +392,9 @@ describe("02-vault-tests", () => {
         ], program.programId);
 
         const amount = new anchor.BN(1 * LAMPORTS_PER_SOL);
+        const xodeAddress = "5CJ6JNcNx2vu4bgVBkeaAFwh4XwnCmjT6HK1MprzzePm7cTY";
 
-        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount)
+        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount, xodeAddress)
             .accounts({
                 signer: signer.publicKey,
                 currentMultisig: multisigPda,
@@ -442,8 +450,9 @@ describe("02-vault-tests", () => {
         ], program.programId);
 
         const amount = new anchor.BN(1 * LAMPORTS_PER_SOL);
+        const xodeAddress = "5CJ6JNcNx2vu4bgVBkeaAFwh4XwnCmjT6HK1MprzzePm7cTY";
 
-        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount)
+        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount, xodeAddress)
             .accounts({
                 signer: signer.publicKey,
                 currentMultisig: multisigPda,
@@ -514,8 +523,9 @@ describe("02-vault-tests", () => {
         ], program.programId);
 
         const amount = new anchor.BN(10 * LAMPORTS_PER_SOL);
+        const xodeAddress = "5CJ6JNcNx2vu4bgVBkeaAFwh4XwnCmjT6HK1MprzzePm7cTY";
 
-        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount)
+        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount, xodeAddress)
             .accounts({
                 signer: signer.publicKey,
                 currentMultisig: multisigPda,
@@ -596,6 +606,7 @@ describe("02-vault-tests", () => {
         expect(ledger.ledger.transaction.transfer).to.not.be.null;
         expect(ledger.ledger.transaction.transfer.to.equals(recipient.publicKey)).to.equal(true);
         expect(ledger.ledger.transaction.transfer.amount.toNumber()).to.equal(amount.toNumber());
+        expect(ledger.ledger.transaction.transfer.xodeAddress).to.equal(xodeAddress);
         expect(ledger.ledger.transaction.teleport).to.be.undefined;
         expect(ledger.ledger.balanceIn.toNumber()).to.equal(0);
         expect(ledger.ledger.balanceOut.toNumber()).to.equal(amount.toNumber());
@@ -625,8 +636,9 @@ describe("02-vault-tests", () => {
         ], program.programId);
 
         const amount = new anchor.BN(10 * LAMPORTS_PER_SOL);
+        const xodeAddress = "5CJ6JNcNx2vu4bgVBkeaAFwh4XwnCmjT6HK1MprzzePm7cTY";
 
-        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount)
+        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount, xodeAddress)
             .accounts({
                 signer: signer.publicKey,
                 currentMultisig: multisigPda,
@@ -707,6 +719,7 @@ describe("02-vault-tests", () => {
         expect(ledger.ledger.transaction.transfer).to.not.be.null;
         expect(ledger.ledger.transaction.transfer.to.equals(recipient.publicKey)).to.equal(true);
         expect(ledger.ledger.transaction.transfer.amount.toNumber()).to.equal(amount.toNumber());
+        expect(ledger.ledger.transaction.transfer.xodeAddress).to.equal(xodeAddress);
         expect(ledger.ledger.transaction.teleport).to.be.undefined;
         expect(ledger.ledger.balanceIn.toNumber()).to.equal(0);
         expect(ledger.ledger.balanceOut.toNumber()).to.equal(amount.toNumber());
@@ -761,8 +774,9 @@ describe("02-vault-tests", () => {
         ], program.programId);
 
         const amount = new anchor.BN(10 * LAMPORTS_PER_SOL);
+        const xodeAddress = "5CJ6JNcNx2vu4bgVBkeaAFwh4XwnCmjT6HK1MprzzePm7cTY";
 
-        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount)
+        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount, xodeAddress)
             .accounts({
                 signer: signer.publicKey,
                 currentMultisig: multisigPda,
@@ -855,8 +869,9 @@ describe("02-vault-tests", () => {
         ], program.programId);
 
         const amount = new anchor.BN(10 * LAMPORTS_PER_SOL);
+        const xodeAddress = "5CJ6JNcNx2vu4bgVBkeaAFwh4XwnCmjT6HK1MprzzePm7cTY";
 
-        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount)
+        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount, xodeAddress)
             .accounts({
                 signer: signer.publicKey,
                 currentMultisig: multisigPda,
@@ -959,8 +974,9 @@ describe("02-vault-tests", () => {
         ], program.programId);
 
         const amount = new anchor.BN(1000 * LAMPORTS_PER_SOL);
+        const xodeAddress = "5CJ6JNcNx2vu4bgVBkeaAFwh4XwnCmjT6HK1MprzzePm7cTY";
 
-        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount)
+        await program.methods.vaultCreateTransferProposal(recipient.publicKey, amount, xodeAddress)
             .accounts({
                 signer: signer.publicKey,
                 currentMultisig: multisigPda,
