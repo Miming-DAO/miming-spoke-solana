@@ -66,7 +66,7 @@ use staking::*;
 use states::*;
 use vault::*;
 
-declare_id!("3e2igyWExmDZmJfRpMRwn5mrM838Fam3AMzPYvttxRT8");
+declare_id!("CvMMhmL2wULc6nJ3obF1Ge9PiZ9ooDTD6CQhYj3rsN3B");
 
 #[program]
 /// This module contains the implementation of the Miming Spoke Solana program.

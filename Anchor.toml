@@ -6,13 +6,13 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-miming_spoke_solana = "3e2igyWExmDZmJfRpMRwn5mrM838Fam3AMzPYvttxRT8"
+miming_spoke_solana = "CvMMhmL2wULc6nJ3obF1Ge9PiZ9ooDTD6CQhYj3rsN3B"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Devnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
