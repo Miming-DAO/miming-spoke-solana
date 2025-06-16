@@ -94,7 +94,6 @@ pub enum VaultTransaction {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub struct VaultLedger {
-    pub id: u64,
     pub user: Pubkey,
     pub transaction: VaultTransaction,
     pub balance_in: u64,
@@ -226,8 +225,8 @@ impl VaultTeleportInstructions {
         let ledger_identifier = &mut ctx.accounts.ledger_identifier;
 
         let ledger = &mut ctx.accounts.ledger;
+        ledger.id = ledger_identifier.id;
         ledger.ledger = VaultLedger {
-            id: ledger_identifier.id,
             user: signer.key(),
             transaction: VaultTransaction::Teleport { 
                 from: signer.key(), 
@@ -529,8 +528,8 @@ impl VaultTransferProposalInstructions {
             let ledger_identifier = &mut ctx.accounts.ledger_identifier;
 
             let ledger = &mut ctx.accounts.ledger;
+            ledger.id = ledger_identifier.id;
             ledger.ledger = VaultLedger {
-                id: ledger_identifier.id,
                 user: vault.key(),
                 transaction: VaultTransaction::Transfer { 
                     to: *to, 
