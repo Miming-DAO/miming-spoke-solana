@@ -1,4 +1,4 @@
-# Miming Spoke - Solana Smart Contracts
+# Miming Spoke - Solana Smart Contract
 
 **Miming Spoke** is a modular Solana smart contract suite built with the Anchor framework. It provides robust multisignature governance, secure vault custody for SOL, and SPL token staking functionalities. Designed for security, transparency, and extensibility, this on-chain system is ideal for DeFi protocols, DAOs, and advanced Solana-based applications.
 
